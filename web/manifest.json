@@ -1,11 +1,11 @@
 {
-    "name": "mbongiseni_nkambule_apt_application",
-    "short_name": "mbongiseni_nkambule_apt_application",
+    "name": "BackyardPay",
+    "short_name": "BackyardPay",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFF8E7",
+    "theme_color": "#6A0DAD",
+    "description": "Rental payment recording and management",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
