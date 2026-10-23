@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import 'common.dart';
+import '../ui/design.dart';
 
 class PropertiesScreen extends StatelessWidget {
   const PropertiesScreen({super.key});
@@ -26,7 +27,7 @@ class PropertiesScreen extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(p.name),
-              subtitle: Text('${p.address}\nCode: ${p.code}'),
+              subtitle: Text('${p.fullAddress}\nCode: ${p.code}'),
               isThreeLine: true,
               trailing: const Icon(Icons.chevron_right),
               onTap: () =>
@@ -47,7 +48,18 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
       help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. No payment processing is performed.',
       fields: [
         FieldSpec('name', 'Property name', initial: property?.name ?? ''),
-        FieldSpec('address', 'Address', initial: property?.address ?? ''),
+        FieldSpec(
+          'address',
+          'Street address / stand number',
+          initial: property?.address ?? '',
+        ),
+        FieldSpec('suburb', 'Suburb / area', initial: property?.suburb ?? ''),
+        FieldSpec('city', 'Town / city', initial: property?.city ?? ''),
+        FieldSpec(
+          'postal',
+          'Postal code (4 digits)',
+          initial: property?.postalCode ?? '',
+        ),
         FieldSpec(
           'rooms',
           'Total rooms',
@@ -72,6 +84,9 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
           id: property?.id,
           name: v['name']!,
           address: v['address']!,
+          suburb: v['suburb']!,
+          city: v['city']!,
+          postalCode: v['postal']!,
           rooms: int.tryParse(v['rooms']!) ?? 0,
           rentCents: parseMoney(v['rent']!),
           dueDay: int.tryParse(v['due']!) ?? 0,
@@ -150,16 +165,25 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     if (p == null)
       return const PageShell(title: 'Property removed', children: []);
     final landlord = store.currentUser!.role == Role.landlord;
-    final occupied = store.tenancies.where((t) => t.propertyId == p.id).length;
+    final occupied = store.tenancies
+        .where((t) => t.propertyId == p.id && store.isOccupied(t))
+        .length;
     return PageShell(
       title: 'Property details',
       children: [
         heading(p.name),
+        if (landlord && p.city.isEmpty)
+          panel(
+            const Text(
+              'Complete this property’s street address, suburb, town and postal code so tenants can identify the rental clearly.',
+              style: TextStyle(color: Palette.goldLight, height: 1.8),
+            ),
+          ),
         panel(
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              detail('Address', p.address),
+              detail('Address', p.fullAddress),
               detail('Total rooms', '${p.rooms}'),
               detail('Occupied', '$occupied'),
               detail('Available', '${p.rooms - occupied}'),

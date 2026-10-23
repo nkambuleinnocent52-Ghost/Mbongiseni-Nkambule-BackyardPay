@@ -45,12 +45,22 @@ void main() {
     });
     await tester.pumpWidget(BackyardPayApp(store: store));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('My properties'), 150, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('My properties'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('My properties'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('My properties'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Empty Test Property'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Delete empty property'), 200, scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Delete empty property'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Delete empty property'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));

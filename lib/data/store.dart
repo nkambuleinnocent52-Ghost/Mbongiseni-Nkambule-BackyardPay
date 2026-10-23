@@ -206,7 +206,8 @@ class AppStore extends ChangeNotifier {
     if (number == null || number < 1 || number > p.rooms)
       throw ArgumentError('Choose a room number from 1 to ${p.rooms}.');
     if (_tenancies.any(
-      (t) => t.propertyId == p.id && t.room == number.toString(),
+      (t) =>
+          t.propertyId == p.id && t.room == number.toString() && isOccupied(t),
     ))
       throw ArgumentError('That room already has a tenant.');
     if (room.trim() != number.toString())
@@ -352,6 +353,9 @@ class AppStore extends ChangeNotifier {
     required int rooms,
     required int rentCents,
     required int dueDay,
+    String suburb = '',
+    String city = '',
+    String postalCode = '',
   }) async {
     final a = _user(Role.landlord);
     if (name.trim().length < 2 ||
@@ -366,6 +370,10 @@ class AppStore extends ChangeNotifier {
       throw ArgumentError('Check the property fields. Due day must be 1–28.');
     return _transaction(() {
       final old = id == null ? null : property(id);
+      if (city.length > 100 ||
+          suburb.length > 100 ||
+          (postalCode.isNotEmpty && !RegExp(r'^\d{4}$').hasMatch(postalCode)))
+        throw ArgumentError('Use a four-digit South African postal code.');
       if (old != null &&
           _tenancies.any(
             (t) => t.propertyId == id && int.parse(t.room) > rooms,
@@ -377,6 +385,9 @@ class AppStore extends ChangeNotifier {
         landlordId: a.id,
         name: name.trim(),
         address: address.trim(),
+        suburb: suburb.trim(),
+        city: city.trim(),
+        postalCode: postalCode.trim(),
         code: old?.code ?? 'BP-${_uuid.v4().substring(0, 8).toUpperCase()}',
         rooms: rooms,
         rentCents: rentCents,
@@ -419,6 +430,9 @@ class AppStore extends ChangeNotifier {
         landlordId: p.landlordId,
         name: p.name,
         address: p.address,
+        suburb: p.suburb,
+        city: p.city,
+        postalCode: p.postalCode,
         code: p.code,
         rooms: p.rooms,
         rentCents: p.rentCents,
@@ -432,7 +446,10 @@ class AppStore extends ChangeNotifier {
   int expected(Tenancy t, String period) {
     tenancy(t.id);
     periodDate(period);
-    return period.compareTo(t.startPeriod) < 0 ? 0 : t.rentCents;
+    return period.compareTo(t.startPeriod) < 0 ||
+            (t.leaseEnd != null && period.compareTo(periodOf(t.leaseEnd!)) > 0)
+        ? 0
+        : t.rentCents;
   }
 
   int collected(Tenancy t, String period) => payments
@@ -473,6 +490,7 @@ class AppStore extends ChangeNotifier {
     required DateTime paidOn,
     required String reference,
     String notes = '',
+    String bankReference = '',
   }) async {
     final a = _user(Role.tenant), t = tenancy(tenancyId);
     if (t.userId != a.id)
@@ -493,6 +511,11 @@ class AppStore extends ChangeNotifier {
         'References may use up to 80 characters and notes up to 500.',
       );
     }
+    if (['EFT', 'PayShap'].contains(method) &&
+        (bankReference.trim().isEmpty || bankReference.length > 100))
+      throw ArgumentError(
+        'Enter the reference from your bank payment confirmation.',
+      );
     final today = DateTime.now();
     if (paidOn.isAfter(
           DateTime(today.year, today.month, today.day, 23, 59, 59),
@@ -525,6 +548,7 @@ class AppStore extends ChangeNotifier {
         paidOn: paidOn,
         reference: reference.trim(),
         notes: notes.trim(),
+        bankReference: bankReference.trim(),
         submittedAt: DateTime.now(),
       );
       _payments.add(p);
@@ -559,6 +583,7 @@ class AppStore extends ChangeNotifier {
         method: p.method,
         reference: p.reference,
         notes: p.notes,
+        bankReference: p.bankReference,
         amountCents: p.amountCents,
         paidOn: p.paidOn,
         submittedAt: p.submittedAt,
@@ -589,6 +614,183 @@ class AppStore extends ChangeNotifier {
     );
   }
 
+  bool isOccupied(Tenancy t) {
+    final now = DateTime.now(),
+        today = DateTime(
+          DateTime.now().year,
+          DateTime.now().month,
+          DateTime.now().day,
+        );
+    return (t.leaseStart == null || !t.leaseStart!.isAfter(now)) &&
+        (t.leaseEnd == null || !t.leaseEnd!.isBefore(today));
+  }
+
+  Account landlordFor(Tenancy t) {
+    tenancy(t.id);
+    final p = property(t.propertyId);
+    return _accounts.firstWhere((a) => a.id == p.landlordId);
+  }
+
+  List<MonthlyAccount> ledger(Tenancy t, {String? through}) {
+    tenancy(t.id);
+    final end = periodDate(through ?? periodOf(DateTime.now()));
+    if (end.isAfter(periodDate(periodOf(DateTime.now()))))
+      throw ArgumentError('Future rent is not yet charged.');
+    final start = periodDate(t.startPeriod);
+    final rows = <MonthlyAccount>[];
+    var balance = 0;
+    for (var m = start; !m.isAfter(end); m = DateTime(m.year, m.month + 1)) {
+      final period = periodOf(m), charge = expected(t, period);
+      if (charge == 0) continue;
+      final confirmed = collected(t, period);
+      final pending = payments
+          .where(
+            (p) =>
+                p.tenancyId == t.id &&
+                p.period == period &&
+                p.state == ReviewState.pending,
+          )
+          .fold(0, (sum, p) => sum + p.amountCents);
+      balance += max(0, charge - confirmed);
+      rows.add(
+        MonthlyAccount(
+          period: period,
+          chargedCents: charge,
+          confirmedCents: confirmed,
+          pendingCents: pending,
+          closingBalanceCents: balance,
+          overdue: overdue(t, period),
+        ),
+      );
+    }
+    return List.unmodifiable(rows);
+  }
+
+  int totalArrears(Tenancy t) => ledger(t)
+      .fold(0, (sum, row) => sum + (row.overdue ? row.outstandingCents : 0));
+  Future<void> saveAgreement(
+    String tenancyId, {
+    required DateTime start,
+    DateTime? end,
+    required String agreementType,
+    required int depositCents,
+    required int depositReceivedCents,
+    required String utilities,
+    required String houseRules,
+    String emergencyName = '',
+    String emergencyPhone = '',
+  }) async {
+    _user(Role.landlord);
+    final t = tenancy(tenancyId);
+    final current = DateTime.now();
+    if (start.year < 2020 ||
+        start.isAfter(
+          DateTime(current.year, current.month, current.day, 23, 59, 59),
+        )) {
+      throw ArgumentError('Start date must be from 2020 through today.');
+    }
+    if (end != null && end.isBefore(start))
+      throw ArgumentError('End date must be after the start date.');
+    if (!['Month-to-month', 'Fixed term'].contains(agreementType) ||
+        (agreementType == 'Fixed term' && end == null)) {
+      throw ArgumentError(
+        'Choose the rental type and an end date for a fixed term.',
+      );
+    }
+    if (agreementType == 'Month-to-month' && end != null)
+      throw ArgumentError(
+        'Leave the end date empty for a month-to-month tenancy.',
+      );
+    if (depositCents < 0 ||
+        depositReceivedCents < 0 ||
+        depositReceivedCents > depositCents)
+      throw ArgumentError(
+        'Deposit received must be between zero and the agreed deposit.',
+      );
+    if (utilities.trim().isEmpty ||
+        houseRules.trim().isEmpty ||
+        utilities.length > 1000 ||
+        houseRules.length > 2000) {
+      throw ArgumentError(
+        'Record utility responsibilities and rental terms within the stated limits.',
+      );
+    }
+    if (emergencyName.length > 80 ||
+        emergencyPhone.length > 20 ||
+        (emergencyPhone.isNotEmpty &&
+            !RegExp(r'^\+?[0-9 ()-]{7,20}$').hasMatch(emergencyPhone)))
+      throw ArgumentError('Check the emergency contact details.');
+    if (_payments.any(
+      (p) =>
+          p.tenancyId == t.id &&
+          (p.period.compareTo(periodOf(start)) < 0 ||
+              (end != null && p.period.compareTo(periodOf(end)) > 0)),
+    ))
+      throw ArgumentError(
+        'Rental dates cannot exclude an existing payment record.',
+      );
+    final infinity = DateTime(9999);
+    if (_tenancies.any(
+      (other) =>
+          other.id != t.id &&
+          other.propertyId == t.propertyId &&
+          other.room == t.room &&
+          !start.isAfter(other.leaseEnd ?? infinity) &&
+          !(other.leaseStart ?? periodDate(other.startPeriod)).isAfter(
+            end ?? infinity,
+          ),
+    )) {
+      throw ArgumentError(
+        'These rental dates overlap another tenancy in the same room.',
+      );
+    }
+    await _transaction(() {
+      _tenancies[_tenancies.indexOf(t)] = Tenancy(
+        id: t.id,
+        userId: t.userId,
+        propertyId: t.propertyId,
+        room: t.room,
+        startPeriod: periodOf(start),
+        rentCents: t.rentCents,
+        dueDay: t.dueDay,
+        leaseStart: start,
+        leaseEnd: end,
+        agreementType: agreementType,
+        depositCents: depositCents,
+        depositReceivedCents: depositReceivedCents,
+        utilities: utilities.trim(),
+        houseRules: houseRules.trim(),
+        emergencyName: emergencyName.trim(),
+        emergencyPhone: emergencyPhone.trim(),
+        termsUpdatedAt: DateTime.now(),
+      );
+      _notice(
+        t.userId,
+        'Rental details updated',
+        'Your landlord updated your rental record. Review the dates, deposit and responsibilities in Rental details.',
+      );
+    });
+  }
+
+  Future<void> acknowledgeAgreement(String tenancyId) async {
+    final a = _user(Role.tenant), t = tenancy(tenancyId);
+    if (t.userId != a.id || !t.agreementRecorded)
+      throw StateError(
+        'No recorded rental terms are available to acknowledge.',
+      );
+    await _transaction(() {
+      _tenancies[_tenancies.indexOf(t)] = Tenancy.fromJson({
+        ...t.toJson(),
+        'acknowledgedAt': DateTime.now().toIso8601String(),
+      });
+      _notice(
+        property(t.propertyId).landlordId,
+        'Rental details reviewed',
+        '${a.name} has acknowledged reading their rental record. This is not a digital signature.',
+      );
+    });
+  }
+
   String get newReference => 'BP-${_uuid.v4().substring(0, 13).toUpperCase()}';
   Future<void> createDemo() async {
     if (hasAccounts)
@@ -602,6 +804,9 @@ class AppStore extends ChangeNotifier {
       final ownerId = _uuid.v4(),
           tenantId = _uuid.v4(),
           propertyId = _uuid.v4();
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month - 3, 1);
+      final demoTenancyId = _uuid.v4();
       _accounts.addAll([
         Account(
           id: ownerId,
@@ -627,7 +832,10 @@ class AppStore extends ChangeNotifier {
           id: propertyId,
           landlordId: ownerId,
           name: 'BackyardPay Demo Rooms',
-          address: 'East London, Eastern Cape',
+          address: '12 Example Lane (fictional demo address)',
+          suburb: 'Southernwood',
+          city: 'East London, Eastern Cape',
+          postalCode: '5201',
           code: 'BP-${_uuid.v4().substring(0, 8).toUpperCase()}',
           rooms: 4,
           rentCents: 150000,
@@ -636,15 +844,46 @@ class AppStore extends ChangeNotifier {
       );
       _tenancies.add(
         Tenancy(
-          id: _uuid.v4(),
+          id: demoTenancyId,
           userId: tenantId,
           propertyId: propertyId,
           room: '1',
-          startPeriod: periodOf(DateTime.now()),
+          startPeriod: periodOf(start),
+          leaseStart: start,
+          agreementType: 'Month-to-month',
+          depositCents: 150000,
+          depositReceivedCents: 150000,
+          utilities:
+              'Demo: tenant pays prepaid electricity; water is included.',
+          houseRules:
+              'Demo terms only: one month notice; keep shared areas clean.',
+          termsUpdatedAt: start,
+          acknowledgedAt: start,
           rentCents: 150000,
           dueDay: 1,
         ),
       );
+      // Clearly fictional history is created only by the explicit empty-store demo action.
+      for (var i = 0; i < 3; i++) {
+        final date = DateTime(start.year, start.month + i, 1);
+        _payments.add(
+          RentPayment(
+            id: _uuid.v4(),
+            tenancyId: demoTenancyId,
+            period: periodOf(date),
+            method: 'EFT',
+            reference: 'DEMO-${periodOf(date)}',
+            bankReference: 'DEMO-BANK-${periodOf(date)}',
+            notes:
+                'Fictional demonstration history; no bank transfer was made.',
+            amountCents: i == 2 ? 90000 : 150000,
+            paidOn: date,
+            submittedAt: date,
+            state: ReviewState.confirmed,
+            reviewedAt: date,
+          ),
+        );
+      }
     });
   }
 }

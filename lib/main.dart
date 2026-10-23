@@ -5,6 +5,7 @@ import 'screens/common.dart';
 import 'screens/auth.dart';
 import 'screens/dashboard.dart';
 import 'services/alerts.dart';
+import 'ui/design.dart';
 
 export 'screens/auth.dart' show SplashScreen, UserTypeScreen;
 
@@ -68,29 +69,7 @@ class _BackyardPayAppState extends State<BackyardPayApp> {
     child: MaterialApp(
       title: 'BackyardPay',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFFF8E7),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6A0DAD),
-          secondary: const Color(0xFFFFB800),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFFFF8E7),
-          foregroundColor: Color(0xFF0A1931),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 50),
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          ),
-        ),
-      ),
+      theme: backyardTheme(),
       home: !ready
           ? Scaffold(
               body: Center(

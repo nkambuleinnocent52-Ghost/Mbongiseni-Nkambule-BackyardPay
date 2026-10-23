@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import 'common.dart';
+import '../ui/design.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,75 +15,192 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(
+          MediaQuery.sizeOf(context).width < 650 ? 22 : 48,
+        ),
+        child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
+            constraints: const BoxConstraints(maxWidth: 1280),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFB800),
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  child: const Icon(
-                    Icons.home_work_rounded,
-                    size: 64,
-                    color: Color(0xFF0A1931),
-                  ),
+                const Row(
+                  children: [
+                    BrandMark(),
+                    SizedBox(width: 14),
+                    Text(
+                      'BACKYARDPAY',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
                 ),
-                gap(24),
+                gap(40),
+                LayoutBuilder(
+                  builder: (context, c) {
+                    final intro = GoldHero(
+                      height: c.maxWidth > 850 ? 560 : 340,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'DIGITAL RENTAL MANAGEMENT',
+                            style: TextStyle(
+                              color: Palette.gold,
+                              fontSize: 11,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          gap(24),
+                          Text(
+                            'Your rental.\nIn perfect order.',
+                            style: TextStyle(
+                              fontSize: c.maxWidth > 850 ? 52 : 36,
+                              fontWeight: FontWeight.w700,
+                              height: 1.18,
+                              letterSpacing: -1,
+                            ),
+                          ),
+                          gap(22),
+                          if (c.maxWidth <= 850) ...[
+                            action(
+                              'GET STARTED',
+                              busy
+                                  ? null
+                                  : () => open(context, const UserTypeScreen()),
+                            ),
+                            gap(18),
+                          ],
+                          const SizedBox(
+                            width: 390,
+                            child: Text(
+                              'Know who has paid. See what is still owed. Keep a clear record for every room and every month.',
+                              style: TextStyle(
+                                color: Palette.muted,
+                                fontSize: 16,
+                                height: 1.8,
+                              ),
+                            ),
+                          ),
+                          gap(32),
+                          const Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              StatusPill('Clear balances'),
+                              StatusPill('Confirmed receipts'),
+                              StatusPill('Two connected roles'),
+                            ],
+                          ),
+                          gap(32),
+                          const Text(
+                            'Rental payment recording made simple.',
+                            style: TextStyle(
+                              color: Palette.goldLight,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    final entry = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        heading('A better place to manage rent'),
+                        const Text(
+                          'Digital Rental Management',
+                          style: TextStyle(color: Palette.muted, height: 1.7),
+                        ),
+                        gap(22),
+                        if (c.maxWidth > 850)
+                          action(
+                            'GET STARTED',
+                            busy
+                                ? null
+                                : () => open(context, const UserTypeScreen()),
+                          ),
+                        gap(12),
+                        const Text(
+                          'Already registered? Choose your role and sign in. New landlords can create a property and invite a tenant with its code.',
+                          style: TextStyle(
+                            color: Palette.muted,
+                            height: 1.8,
+                            fontSize: 12,
+                          ),
+                        ),
+                        gap(22),
+                        const Divider(),
+                        if (!StoreScope.of(context).hasAccounts)
+                          action(
+                            busy ? 'Creating demo…' : 'Try with demo accounts',
+                            busy
+                                ? null
+                                : () async {
+                                    setState(() => busy = true);
+                                    await perform(
+                                      context,
+                                      () => StoreScope.of(context).createDemo(),
+                                      success: 'Demo accounts created. Use the details shown below.',
+                                    );
+                                    if (mounted) setState(() => busy = false);
+                                  },
+                            icon: Icons.science_outlined,
+                          ),
+                        ExpansionTile(
+                          tilePadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Demo sign-in details',
+                            style: TextStyle(fontSize: 13),
+                          ),
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 16),
+                              child: SelectableText(
+                                'Landlord: landlord@demo.test\nTenant: tenant@demo.test\nPassword: DemoPass123!\nCreate demo accounts first on an empty device.',
+                              ),
+                            ),
+                          ],
+                        ),
+                        gap(),
+                        const Text(
+                          'Records stay on this browser/device. BackyardPay records payments; it never moves money.',
+                          style: TextStyle(
+                            color: Palette.muted,
+                            fontSize: 11,
+                            height: 1.7,
+                          ),
+                        ),
+                      ],
+                    );
+                    return c.maxWidth > 850
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 6, child: intro),
+                              const SizedBox(width: 56),
+                              Expanded(
+                                flex: 4,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 24),
+                                  child: entry,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(children: [intro, gap(24), panel(entry)]);
+                  },
+                ),
+                gap(30),
                 const Text(
-                  'BACKYARDPAY',
+                  'BUILT FOR BACKYARD COMMUNITIES. DESIGNED FOR EVERYDAY CLARITY.',
                   style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0A1931),
-                  ),
-                ),
-                gap(),
-                const Text(
-                  'Digital Rental Management',
-                  style: TextStyle(fontSize: 20),
-                ),
-                gap(),
-                const Text(
-                  'Rental payment recording made simple.',
-                  textAlign: TextAlign.center,
-                ),
-                gap(24),
-                action(
-                  'GET STARTED',
-                  busy ? null : () => open(context, const UserTypeScreen()),
-                ),
-                gap(),
-                panel(
-                  const Text(
-                    'Student prototype: records payments; does not transfer money. Accounts share data only on this browser/device. Browser data may be cleared by your browser.',
-                  ),
-                ),
-                if (!StoreScope.of(context).hasAccounts)
-                  action(
-                    busy ? 'Creating demo…' : 'Try with demo accounts',
-                    busy
-                        ? null
-                        : () async {
-                            setState(() => busy = true);
-                            await perform(
-                              context,
-                              () => StoreScope.of(context).createDemo(),
-                              success: 'Demo accounts created. Use the details shown below.',
-                            );
-                            if (mounted) setState(() => busy = false);
-                          },
-                    icon: Icons.science_outlined,
-                  ),
-                panel(
-                  const Text(
-                    'Optional demo login\nLandlord: landlord@demo.test\nTenant: tenant@demo.test\nPassword for both: DemoPass123!\nUse the matching role when signing in. These logins work only after demo accounts have been created.',
+                    color: Palette.muted,
+                    fontSize: 10,
+                    letterSpacing: 1.1,
                   ),
                 ),
               ],
@@ -100,7 +218,16 @@ class UserTypeScreen extends StatelessWidget {
   Widget build(BuildContext context) => PageShell(
     title: 'Welcome to BackyardPay',
     children: [
+      const Text(
+        'YOUR SPACE. YOUR ROLE.',
+        style: TextStyle(color: Palette.gold, fontSize: 11, letterSpacing: 2),
+      ),
       heading('How will you use the app?'),
+      const Text(
+        'Choose the workspace that fits your rental journey.',
+        style: TextStyle(color: Palette.muted),
+      ),
+      gap(18),
       for (final role in Role.values)
         panel(
           Column(
@@ -224,9 +351,18 @@ class _AuthScreenState extends State<AuthScreen> {
   );
   @override
   Widget build(BuildContext context) => PageShell(
+    maxWidth: 600,
     title:
         '${widget.role == Role.landlord ? 'Landlord' : 'Tenant'} ${registration ? 'registration' : 'login'}',
     children: [
+      const BrandMark(size: 54),
+      gap(16),
+      heading(registration ? 'Make yourself at home.' : 'Welcome back.'),
+      const Text(
+        'Your rental records, securely organised on this device.',
+        style: TextStyle(color: Palette.muted),
+      ),
+      gap(20),
       Form(
         key: form,
         child: Column(

@@ -9,7 +9,7 @@ let activePage, activeBrowser;
   const browser = await chromium.launch({executablePath:process.env.CHROME_BIN || '/usr/bin/chromium',
     headless:true,args:['--no-sandbox']});
   activeBrowser=browser;
-  const context = await browser.newContext({viewport:{width:390,height:844},
+  const context = await browser.newContext({viewport:{width:1440,height:1000},
     acceptDownloads:true,geolocation:{latitude:-33.0153,longitude:27.9116},permissions:['geolocation']});
   const page = await context.newPage();
   activePage=page;
@@ -25,6 +25,13 @@ let activePage, activeBrowser;
   const button = async name => {
     console.log('Click',name);
     const b=page.getByRole('button',{name,exact:true});
+    for (let i=0;i<16;i++) {
+      const box=await b.count() ? await b.first().boundingBox().catch(()=>null) : null;
+      if(box && box.y>=0 && box.y+box.height<=1000) break;
+      await page.mouse.move(1050,700);
+      await page.mouse.wheel(0,box && box.y<0 ? -650 : 650);
+      await page.waitForTimeout(150);
+    }
     await b.first().click();
     await page.mouse.move(380,820);
     await page.waitForTimeout(450);
@@ -66,7 +73,7 @@ let activePage, activeBrowser;
   await page.screenshot({path:evidence+'/03-landlord-review.png'});
   await button('Confirm payment');await button('Confirm received');await text('CONFIRMED');
   await button('Back to dashboard');
-  await page.getByText('Outstanding: R 0.00',{exact:false}).waitFor();
+  await page.waitForFunction(() => document.body.innerText.includes('Outstanding: R 0.00'));
   await button('My tenants');
   await page.getByText('Demo Tenant',{exact:false}).click();
   await button('Send rent reminder');await button('Send reminder');
@@ -100,12 +107,21 @@ let activePage, activeBrowser;
   assert.equal(bytes.subarray(0,4).toString(),'%PDF');
   fs.writeFileSync(evidence+'/confirmed-receipt.pdf',bytes);
   await button('Back to dashboard');
+  await button('Rental details');
+  await button('Monthly rental account');
+  const statementEvent=page.waitForEvent('download');
+  await button('Download account statement');
+  const statement=await statementEvent;
+  const statementBytes=fs.readFileSync(await statement.path());
+  assert.equal(statementBytes.subarray(0,4).toString(),'%PDF');
+  fs.writeFileSync(evidence+'/monthly-account.pdf',statementBytes);
+  await button('Back');await button('Back');
   await page.reload();
   const placeholder=page.locator('flt-semantics-placeholder');
   await placeholder.waitFor({state:'attached'});await placeholder.evaluate(e=>e.click());
-  await text('Tenant dashboard');await text('Outstanding: R 0.00');
+  await text('Tenant dashboard');await page.waitForFunction(() => document.body.innerText.includes('Outstanding: R 0.00'));
   await page.screenshot({path:process.env.SCREENSHOT_PATH || evidence+'/06-tenant-dashboard.png'});
   assert.deepEqual(errors,[]);
-  console.log('Browser smoke passed: account switching, payment approval, reminder, simulated geolocation, PDF download and persistence at 390px.');
+  console.log('Browser smoke passed: account switching, payment approval, reminder, simulated geolocation, PDF download and persistence at 1440px.');
   await browser.close();
 })().catch(async e=>{ console.error(e); if(activePage) { console.log('Failure screen',await activePage.locator('body').innerText()); await activePage.screenshot({path:'/tmp/backyardpay-smoke-failure.png'}); } if(activeBrowser) await activeBrowser.close(); process.exit(1); });

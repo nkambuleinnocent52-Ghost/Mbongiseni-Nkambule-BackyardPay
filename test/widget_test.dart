@@ -16,6 +16,7 @@ void main() {
     expect(find.text('BACKYARDPAY'), findsOneWidget);
     expect(find.text('Digital Rental Management'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('GET STARTED'));
     await tester.tap(find.text('GET STARTED'));
     await tester.pumpAndSettle();
 

@@ -269,6 +269,7 @@ void main() {
         method: 'EFT',
         paidOn: DateTime(today.year, today.month, 1),
         reference: 'on-time',
+        bankReference: 'EFT-ON-TIME',
       );
       await store.logout();
       await landlord();
@@ -315,5 +316,191 @@ void main() {
     expect(demo.tenancies.single.rentCents, 150000);
     await expectLater(demo.createDemo(), throwsStateError);
     demo.dispose();
+  });
+  Future<void> recordTerms({
+    DateTime? end,
+    String type = 'Month-to-month',
+  }) async {
+    final now = DateTime.now();
+    await store.saveAgreement(
+      tenancyId,
+      start: DateTime(now.year, now.month - 2, 1),
+      end: end,
+      agreementType: type,
+      depositCents: 150000,
+      depositReceivedCents: 50000,
+      utilities: 'Tenant pays prepaid electricity; water included.',
+      houseRules: 'One month notice agreed by the parties.',
+    );
+  }
+
+  test('monthly account includes unpaid months and carries only confirmed balances', () async {
+    await store.logout();
+    await landlord();
+    await recordTerms();
+    await store.logout();
+    await tenant();
+    final now = DateTime.now(),
+        start = DateTime(DateTime.now().year, DateTime.now().month - 2, 1);
+    final id = await store.submitPayment(
+      tenancyId: tenancyId,
+      period: periodOf(start),
+      amountCents: 90000,
+      method: 'EFT',
+      bankReference: 'BANK-900',
+      paidOn: start,
+      reference: 'ALLOCATION-900',
+    );
+    await store.logout();
+    await landlord();
+    await store.reviewPayment(id, confirm: true);
+    await store.logout();
+    await tenant();
+    await store.submitPayment(
+      tenancyId: tenancyId,
+      period: period,
+      amountCents: 60000,
+      method: 'Cash',
+      paidOn: now,
+      reference: 'PENDING-600',
+    );
+    final rows = store.ledger(store.tenancy(tenancyId));
+    expect(rows.length, 3);
+    expect(rows[0].status, 'Partially paid');
+    expect(rows[0].closingBalanceCents, 60000);
+    expect(rows[1].status, 'Outstanding');
+    expect(rows[1].confirmedCents, 0);
+    expect(rows[1].closingBalanceCents, 210000);
+    expect(rows.last.pendingCents, 60000);
+    expect(rows.last.closingBalanceCents, 360000);
+    final pdf = await accountStatementPdf(store, tenancyId);
+    expect(ascii.decode(pdf.take(4).toList()), '%PDF');
+    expect(store.tenancy(tenancyId).depositReceivedCents, 50000);
+  });
+  test('bank references are required for transfer records and survive landlord review', () async {
+    await expectLater(
+      store.submitPayment(
+        tenancyId: tenancyId,
+        period: period,
+        amountCents: 10000,
+        method: 'EFT',
+        paidOn: DateTime.now(),
+        reference: 'NO-BANK',
+      ),
+      throwsArgumentError,
+    );
+    final id = await store.submitPayment(
+      tenancyId: tenancyId,
+      period: period,
+      amountCents: 10000,
+      method: 'PayShap',
+      bankReference: 'BANK-TRANSFER-REF',
+      paidOn: DateTime.now(),
+      reference: 'APP-RECORD-REF',
+    );
+    expect(store.payment(id).state, ReviewState.pending);
+    await store.logout();
+    await landlord();
+    await store.reviewPayment(id, confirm: true);
+    expect(store.payment(id).bankReference, 'BANK-TRANSFER-REF');
+    expect(store.payment(id).reference, 'APP-RECORD-REF');
+    final restored = AppStore(storage);
+    await restored.load();
+    expect(restored.payment(id).bankReference, 'BANK-TRANSFER-REF');
+    restored.dispose();
+  });
+  test('rental terms are owned, validated and acknowledgement resets after an edit', () async {
+    await expectLater(recordTerms(), throwsStateError);
+    await store.logout();
+    await landlord();
+    await recordTerms();
+    expect(store.tenancy(tenancyId).agreementRecorded, isTrue);
+    await store.logout();
+    await tenant();
+    await store.acknowledgeAgreement(tenancyId);
+    expect(store.tenancy(tenancyId).acknowledgedAt, isNotNull);
+    await store.logout();
+    await landlord();
+    await recordTerms();
+    expect(store.tenancy(tenancyId).acknowledgedAt, isNull);
+    await expectLater(
+      store.saveAgreement(
+        tenancyId,
+        start: DateTime.now(),
+        agreementType: 'Fixed term',
+        depositCents: 10000,
+        depositReceivedCents: 20000,
+        utilities: 'Water included',
+        houseRules: 'One month notice',
+      ),
+      throwsArgumentError,
+    );
+    expect(store.tenancy(tenancyId).depositReceivedCents, 50000);
+  });
+  test('ended rental stops future charges, releases room and prevents date overlap', () async {
+    await store.logout();
+    await landlord();
+    final now = DateTime.now(),
+        end = DateTime(DateTime.now().year, DateTime.now().month, 0);
+    await recordTerms(end: end, type: 'Fixed term');
+    final old = store.tenancy(tenancyId),
+        code = store.property(propertyId).code;
+    expect(store.expected(old, period), 0);
+    expect(store.isOccupied(old), isFalse);
+    await store.logout();
+    await store.register(
+      name: 'New Tenant',
+      email: 'new@test.com',
+      phone: '0710000009',
+      password: 'password123',
+      role: Role.tenant,
+      code: code,
+      room: '1',
+    );
+    await store.logout();
+    await landlord();
+    expect(store.tenancies.where(store.isOccupied).length, 1);
+    await expectLater(
+      recordTerms(end: now, type: 'Fixed term'),
+      throwsArgumentError,
+    );
+  });
+  test('old saved data loads without losing accounts, payments or inventing rental terms', () async {
+    final id = await submit(20000, 'LEGACY');
+    final data = jsonDecode(storage.data!);
+    for (final p in data['properties']) {
+      for (final k in ['city', 'suburb', 'postalCode']) {
+        p.remove(k);
+      }
+    }
+    for (final t in data['tenancies']) {
+      for (final k in [
+        'leaseStart',
+        'leaseEnd',
+        'depositCents',
+        'depositReceivedCents',
+        'agreementType',
+        'utilities',
+        'houseRules',
+        'emergencyName',
+        'emergencyPhone',
+        'termsUpdatedAt',
+        'acknowledgedAt',
+      ]) {
+        t.remove(k);
+      }
+    }
+    for (final p in data['payments']) {
+      p.remove('bankReference');
+    }
+    storage.data = jsonEncode(data);
+    final restored = AppStore(storage);
+    await restored.load();
+    expect(restored.currentUser!.email, 'tenant@test.com');
+    expect(restored.payment(id).amountCents, 20000);
+    expect(restored.tenancy(tenancyId).agreementRecorded, isFalse);
+    expect(restored.tenancy(tenancyId).depositCents, isNull);
+    expect(restored.ledger(restored.tenancy(tenancyId)).length, 1);
+    restored.dispose();
   });
 }

@@ -63,6 +63,13 @@ class Account {
 
 class RentalProperty {
   final String id, landlordId, name, address, code;
+  final String suburb, city, postalCode;
+  String get fullAddress => [
+    address,
+    suburb,
+    city,
+    postalCode,
+  ].where((s) => s.trim().isNotEmpty).join(', ');
   final int rooms, rentCents, dueDay;
   final double? latitude, longitude;
   const RentalProperty({
@@ -76,12 +83,18 @@ class RentalProperty {
     required this.dueDay,
     this.latitude,
     this.longitude,
+    this.suburb = '',
+    this.city = '',
+    this.postalCode = '',
   });
   factory RentalProperty.fromJson(Map<String, dynamic> j) => RentalProperty(
     id: j['id'],
     landlordId: j['landlordId'],
     name: j['name'],
     address: j['address'],
+    suburb: j['suburb'] ?? '',
+    city: j['city'] ?? '',
+    postalCode: j['postalCode'] ?? '',
     code: j['code'],
     rooms: j['rooms'],
     rentCents: j['rentCents'],
@@ -94,6 +107,9 @@ class RentalProperty {
     'landlordId': landlordId,
     'name': name,
     'address': address,
+    'suburb': suburb,
+    'city': city,
+    'postalCode': postalCode,
     'code': code,
     'rooms': rooms,
     'rentCents': rentCents,
@@ -106,6 +122,15 @@ class RentalProperty {
 class Tenancy {
   final String id, userId, propertyId, room, startPeriod;
   final int rentCents, dueDay;
+  final DateTime? leaseStart, leaseEnd, termsUpdatedAt, acknowledgedAt;
+  final int? depositCents, depositReceivedCents;
+  final String agreementType,
+      utilities,
+      houseRules,
+      emergencyName,
+      emergencyPhone;
+  bool get agreementRecorded => leaseStart != null;
+
   const Tenancy({
     required this.id,
     required this.userId,
@@ -114,6 +139,17 @@ class Tenancy {
     required this.startPeriod,
     required this.rentCents,
     required this.dueDay,
+    this.leaseStart,
+    this.leaseEnd,
+    this.termsUpdatedAt,
+    this.acknowledgedAt,
+    this.depositCents,
+    this.depositReceivedCents,
+    this.agreementType = 'Not recorded',
+    this.utilities = '',
+    this.houseRules = '',
+    this.emergencyName = '',
+    this.emergencyPhone = '',
   });
   factory Tenancy.fromJson(Map<String, dynamic> j) => Tenancy(
     id: j['id'],
@@ -123,6 +159,23 @@ class Tenancy {
     startPeriod: j['startPeriod'],
     rentCents: j['rentCents'],
     dueDay: j['dueDay'] ?? 1,
+    leaseStart: j['leaseStart'] == null
+        ? null
+        : DateTime.parse(j['leaseStart']),
+    leaseEnd: j['leaseEnd'] == null ? null : DateTime.parse(j['leaseEnd']),
+    termsUpdatedAt: j['termsUpdatedAt'] == null
+        ? null
+        : DateTime.parse(j['termsUpdatedAt']),
+    acknowledgedAt: j['acknowledgedAt'] == null
+        ? null
+        : DateTime.parse(j['acknowledgedAt']),
+    depositCents: j['depositCents'],
+    depositReceivedCents: j['depositReceivedCents'],
+    agreementType: j['agreementType'] ?? 'Not recorded',
+    utilities: j['utilities'] ?? '',
+    houseRules: j['houseRules'] ?? '',
+    emergencyName: j['emergencyName'] ?? '',
+    emergencyPhone: j['emergencyPhone'] ?? '',
   );
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -132,12 +185,24 @@ class Tenancy {
     'startPeriod': startPeriod,
     'rentCents': rentCents,
     'dueDay': dueDay,
+    'leaseStart': leaseStart?.toIso8601String(),
+    'leaseEnd': leaseEnd?.toIso8601String(),
+    'termsUpdatedAt': termsUpdatedAt?.toIso8601String(),
+    'acknowledgedAt': acknowledgedAt?.toIso8601String(),
+    'depositCents': depositCents,
+    'depositReceivedCents': depositReceivedCents,
+    'agreementType': agreementType,
+    'utilities': utilities,
+    'houseRules': houseRules,
+    'emergencyName': emergencyName,
+    'emergencyPhone': emergencyPhone,
   };
 }
 
 class RentPayment {
   final String id, tenancyId, period, method, reference, notes;
   final int amountCents;
+  final String bankReference;
   final DateTime paidOn, submittedAt;
   final ReviewState state;
   final String? rejectionReason;
@@ -154,6 +219,7 @@ class RentPayment {
     required this.submittedAt,
     this.state = ReviewState.pending,
     this.rejectionReason,
+    this.bankReference = '',
     this.reviewedAt,
   });
   factory RentPayment.fromJson(Map<String, dynamic> j) => RentPayment(
@@ -163,6 +229,7 @@ class RentPayment {
     method: j['method'],
     reference: j['reference'],
     notes: j['notes'],
+    bankReference: j['bankReference'] ?? '',
     amountCents: j['amountCents'],
     paidOn: DateTime.parse(j['paidOn']),
     submittedAt: DateTime.parse(j['submittedAt']),
@@ -179,6 +246,7 @@ class RentPayment {
     'method': method,
     'reference': reference,
     'notes': notes,
+    'bankReference': bankReference,
     'amountCents': amountCents,
     'paidOn': paidOn.toIso8601String(),
     'submittedAt': submittedAt.toIso8601String(),
@@ -216,4 +284,24 @@ class AppNotice {
     'createdAt': createdAt.toIso8601String(),
     'read': read,
   };
+}
+
+class MonthlyAccount {
+  final String period;
+  final int chargedCents, confirmedCents, pendingCents, closingBalanceCents;
+  final bool overdue;
+  const MonthlyAccount({
+    required this.period,
+    required this.chargedCents,
+    required this.confirmedCents,
+    required this.pendingCents,
+    required this.closingBalanceCents,
+    required this.overdue,
+  });
+  int get outstandingCents => chargedCents - confirmedCents;
+  String get status => confirmedCents >= chargedCents
+      ? 'Paid'
+      : confirmedCents > 0
+      ? 'Partially paid'
+      : 'Outstanding';
 }

@@ -2,6 +2,12 @@
 
 Flutter rental payment-record prototype for APT 41P2. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
+## Black and gold redesign
+
+The responsive charcoal and gold interface includes separate landlord/tenant dashboards, collection trends, room occupancy, unpaid tenant status, and a monthly rental ledger with downloadable account statements. Rental records include dates, deposits, utilities, rules, contact details and a tenant read acknowledgement. EFT/PayShap bank references are separate from app references; a rent allocation acknowledgement does not replace bank proof. Existing browser records migrate without being replaced by demo data.
+
+See [the lecturer feedback response](docs/lecturer-feedback-response.md) for the problem statement, implemented improvements and remaining limitations.
+
 ## Working features
 
 - Landlord and tenant registration, password verification, profile editing, password changes and logout. Passwords use PBKDF2-HMAC-SHA256 with a separate random salt per account.
@@ -77,7 +83,7 @@ Implementation uses Flutter/Dart, shared_preferences, cryptography, geolocator, 
 
 ## Download the prepared app
 
-- [Compiled website ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-web.zip?raw=true) — extract it and upload the folder containing `index.html` to Netlify. Flutter is not required on your PC.
-- [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-source.zip?raw=true) — editable Flutter project.
+- [Compiled website ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-BlackGold-web.zip?raw=true) — upload the ZIP using the existing Netlify project’s **Already built it? → choose a file** control. Flutter is not required on your PC.
+- [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-BlackGold-source.zip?raw=true) — editable Flutter project.
 
 The website is not deployed by uploading these files to GitHub. Hosting and Android testing are separate steps.

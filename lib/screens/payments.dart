@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../services/receipts.dart';
 import 'common.dart';
 import 'dashboard.dart';
+import '../ui/design.dart';
 
 class PaymentFormScreen extends StatefulWidget {
   final String tenancyId;
@@ -17,7 +18,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
   final form = GlobalKey<FormState>();
   final amount = TextEditingController(),
       reference = TextEditingController(),
-      notes = TextEditingController();
+      notes = TextEditingController(),
+      bankReference = TextEditingController();
   String period = periodOf(DateTime.now()), method = 'Cash';
   DateTime paidOn = DateTime.now();
   bool initialized = false, busy = false;
@@ -38,6 +40,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     amount.dispose();
     reference.dispose();
     notes.dispose();
+    bankReference.dispose();
     super.dispose();
   }
 
@@ -57,6 +60,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         paidOn: paidOn,
         reference: reference.text,
         notes: notes.text,
+        bankReference: bankReference.text,
       );
       if (mounted && ModalRoute.of(context)?.isCurrent == true)
         Navigator.pushReplacement(
@@ -86,16 +90,24 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     }
     return PageShell(
       title: 'Record rent payment',
+      maxWidth: 740,
       children: [
         panel(
           const Text(
-            'Record money already paid to your landlord. BackyardPay does not transfer money. Cash, EFT and PayShap all remain pending until reviewed. Partial payments are allowed; overpayments are not.',
+            'Pay your landlord first by cash or through your banking app. Then record the payment here. BackyardPay does not connect to your bank, initiate transfers or verify a bank balance. Your landlord matches the record to money received.',
           ),
         ),
         Form(
           key: form,
           child: Column(
             children: [
+              if (method == 'EFT' || method == 'PayShap')
+                panel(
+                  const Text(
+                    'Your bank proof records the transfer. The landlord’s rent acknowledgement confirms receipt and allocates it to your room and rental month. Keep both; BackyardPay does not replace the bank proof.',
+                    style: TextStyle(color: Palette.goldLight, height: 1.8),
+                  ),
+                ),
               gap(),
               DropdownButtonFormField<String>(
                 initialValue: period,
@@ -133,6 +145,18 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                 onChanged: busy ? null : (v) => setState(() => method = v!),
               ),
               gap(),
+              if (method == 'EFT' || method == 'PayShap') ...[
+                TextFormField(
+                  controller: bankReference,
+                  enabled: !busy,
+                  decoration: const InputDecoration(
+                    labelText: 'Bank / PayShap transaction reference',
+                    helperText: 'Use the reference on your bank confirmation, not a PIN or password.',
+                  ),
+                  validator: requiredField,
+                ),
+                gap(),
+              ],
               ListTile(
                 title: Text(
                   'Payment date: ${paidOn.toIso8601String().split('T').first}',
@@ -191,13 +215,15 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
 
 class PaymentsScreen extends StatefulWidget {
   final String? tenancyId;
-  const PaymentsScreen({super.key, this.tenancyId});
+  final String? initialPeriod;
+  const PaymentsScreen({super.key, this.tenancyId, this.initialPeriod});
   @override
   State<PaymentsScreen> createState() => _PaymentsScreenState();
 }
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
-  String filter = 'All', period = periodOf(DateTime.now());
+  String filter = 'All';
+  late String period = widget.initialPeriod ?? periodOf(DateTime.now());
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
@@ -298,8 +324,10 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         context: context,
         builder: (c) => AlertDialog(
           title: const Text('Confirm you received this payment?'),
-          content: const Text(
-            'Check the cash or bank record first. This confirms the record and makes a receipt available.',
+          content: Text(
+            store.payment(widget.paymentId).method == 'Cash'
+                ? 'Confirm only after checking the cash received.'
+                : 'Match the amount, date and transaction reference to money received in your bank account. BackyardPay has no direct bank connection.',
           ),
           actions: [
             TextButton(
@@ -384,9 +412,18 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
                 'Payment date',
                 p.paidOn.toIso8601String().split('T').first,
               ),
-              detail('Reference', p.reference),
+              detail('Record reference', p.reference),
+              if (p.bankReference.isNotEmpty)
+                detail('Bank transaction reference', p.bankReference),
               if (p.notes.isNotEmpty) detail('Notes', p.notes),
               if (confirmed) ...[
+                if (p.method == 'EFT' || p.method == 'PayShap')
+                  panel(
+                    const Text(
+                      'This rent acknowledgement confirms the landlord allocated the received payment to your rental month. Keep your original bank proof; this is not a bank-issued receipt.',
+                      style: TextStyle(color: Palette.goldLight, height: 1.8),
+                    ),
+                  ),
                 detail(
                   'Confirmed on',
                   p.reviewedAt!.toLocal().toString().split('.').first,
