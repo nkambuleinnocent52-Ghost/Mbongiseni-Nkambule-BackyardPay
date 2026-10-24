@@ -1,127 +1,110 @@
-// Run against an already served web build. Uses fictional demo data in a fresh browser context.
-const { chromium } = require('playwright');
-const assert = require('node:assert/strict');
+// Flutter browser/API contract test with an isolated simulated Supabase transport.
+// No real Supabase project is contacted or seeded. Server authorization is tested
+// separately against PostgreSQL by tool/test_database.sh.
+const {chromium}=require('playwright');
+const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const evidence=process.env.EVIDENCE_DIR || '/tmp/backyardpay-evidence';
-fs.mkdirSync(evidence,{recursive:true});
-let activePage, activeBrowser;
-(async () => {
-  const browser = await chromium.launch({executablePath:process.env.CHROME_BIN || '/usr/bin/chromium',
-    headless:true,args:['--no-sandbox']});
-  activeBrowser=browser;
-  const context = await browser.newContext({viewport:{width:1440,height:1000},
-    acceptDownloads:true,geolocation:{latitude:-33.0153,longitude:27.9116},permissions:['geolocation']});
-  const page = await context.newPage();
-  activePage=page;
-  const errors = [];
-  page.on('pageerror',e=>errors.push(e.message));
-  page.on('console',m=>{ if(m.type()==='error') errors.push(m.text()); });
-  const activate = async () => {
-    const placeholder=page.locator('flt-semantics-placeholder');
-    await placeholder.waitFor({state:'attached',timeout:30000});
-    await placeholder.evaluate(e=>e.click());
-    await page.getByRole('button',{name:'GET STARTED',exact:true}).waitFor();
-  };
-  const button = async name => {
-    console.log('Click',name);
-    const b=page.getByRole('button',{name,exact:true});
-    for (let i=0;i<16;i++) {
-      const box=await b.count() ? await b.first().boundingBox().catch(()=>null) : null;
-      if(box && box.y>=0 && box.y+box.height<=1000) break;
-      await page.mouse.move(1050,700);
-      await page.mouse.wheel(0,box && box.y<0 ? -650 : 650);
-      await page.waitForTimeout(150);
+const crypto=require('node:crypto');
+const dir=process.env.EVIDENCE_DIR || '/tmp/backyardpay-cloud-evidence';fs.mkdirSync(dir,{recursive:true});
+const users=[], properties=[], tenancies=[], payments=[], notices=[];
+const now=()=>new Date().toISOString();
+const jwt=u=>`${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')}.test-only`;
+const session=u=>({access_token:jwt(u),refresh_token:u.id,token_type:'bearer',expires_in:3600,user:{id:u.id,email:u.email,role:'authenticated',aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:now()}});
+const snapshot=u=>{
+ const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
+ const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
+ const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
+ return {version:1,session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+};
+let browser;
+let recoveryEmail;
+(async()=>{
+ browser=await chromium.launch({executablePath:process.env.CHROME_BIN||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const errors=[];
+ const make=async()=>{
+  const context=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});
+  await context.route('https://zmxxgetndtcyuwzwwjbd.supabase.co/**',async route=>{
+   const req=route.request(),path=new URL(req.url()).pathname,body=req.postDataJSON()||{};
+   const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+   if(path.endsWith('/signup')){
+    const u={id:crypto.randomUUID(),email:body.email,password:body.password,...body.data,salt:'',passwordHash:''};users.push(u);
+    if(u.role==='tenant'){
+     const p=properties.find(p=>p.code===u.code);assert(p);assert(!tenancies.some(t=>t.propertyId===p.id&&t.room===u.room));
+     tenancies.push({id:crypto.randomUUID(),userId:u.id,propertyId:p.id,room:u.room,startPeriod:now().slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay});
     }
-    await b.first().click();
-    await page.mouse.move(380,820);
-    await page.waitForTimeout(450);
-  };
-  const text = async expected => {
-    const target = expected === 'PENDING' || expected === 'CONFIRMED' ? new RegExp('^'+expected+'$') : expected;
-    await page.getByText(target,{exact:false}).first().waitFor({timeout:30000});
-  };
-  const login = async (role,email) => {
-    await button('GET STARTED');await button(role);
-    await page.getByRole('textbox',{name:'Email',exact:true}).click();
-    await page.waitForTimeout(150);
-    await page.keyboard.type(email);
-    await page.getByRole('textbox',{name:'Password',exact:true}).click();
-    await page.waitForTimeout(150);
-    await page.keyboard.type('DemoPass123!');
-    await button('Login');
-    try { await text(role === 'TENANT' ? 'Tenant dashboard' : 'Landlord dashboard'); } catch (e) { console.log('Login screen', await page.locator('body').innerText()); console.log('Errors',errors); await page.screenshot({path:'/tmp/backyardpay-login-failure.png'}); throw e; }
-  };
-  const logout = async () => {
-    await button('Profile');await button('Logout');await button('GET STARTED');
-    // Return to splash so the login helper starts from the same place each time.
-    await button('Back');
-  };
-  await page.goto(process.env.APP_URL || 'http://127.0.0.1:8080/');await activate();
-  await page.screenshot({path:evidence+'/01-splash.png'});
-  await button('Try with demo accounts');
-  await text('Demo accounts created. Use the details shown below.');
-  await login('TENANT','tenant@demo.test');
-  await button('Record payment');
-  // Keep the prefilled full monthly rent; amount validation/partial payments have separate domain tests.
-  await button('Submit payment');
-  await text('PENDING');
-  await page.screenshot({path:evidence+'/02-pending-payment.png'});
-  assert.equal(await page.getByRole('button',{name:'Download / share receipt',exact:true}).count(),0);
-  await button('Back to dashboard');await logout();
-  await login('LANDLORD','landlord@demo.test');await button('Payment records');
-  await page.getByText('Demo Tenant • R 1500.00',{exact:false}).click();
-  await page.screenshot({path:evidence+'/03-landlord-review.png'});
-  await button('Confirm payment');await button('Confirm received');await text('CONFIRMED');
-  await button('Back to dashboard');
-  await page.waitForFunction(() => document.body.innerText.includes('Outstanding: R 0.00'));
-  await button('My tenants');
-  await page.getByText('Demo Tenant',{exact:false}).click();
-  await button('Send rent reminder');await button('Send reminder');
-  await button('Back');await button('Back');
-  await button('My properties');await page.getByText('BackyardPay Demo Rooms',{exact:false}).click();
-  await button('Capture current location');await text('Save this property location?');
-  await button('Save location');
-  await page.waitForFunction(() => {
-    const key=Object.keys(localStorage).find(k=>k.endsWith('backyardpay_v1'));
-    if(!key) return false;
-    const saved=JSON.parse(localStorage.getItem(key));
-    const data=typeof saved === 'string' ? JSON.parse(saved) : saved;
-    return data.properties.some(p=>p.latitude === -33.0153 && p.longitude === 27.9116);
+    return reply(session(u));
+   }
+   if(path.endsWith('/recover')) { recoveryEmail=body.email;return reply({}); }
+   if(path.endsWith('/token')){
+    const u=body.auth_code?users.find(u=>u.email===recoveryEmail):body.refresh_token?users.find(u=>u.id===body.refresh_token):users.find(u=>u.email===body.email&&u.password===body.password);assert(u);return reply(session(u));
+   }
+   if(path.endsWith('/logout'))return reply({});
+   const token=req.headers().authorization?.split(' ')[1];
+   const id=token?JSON.parse(Buffer.from(token.split('.')[1],'base64url')).sub:null;
+   const u=users.find(u=>u.id===id);assert(u,'Authenticated API request required');
+   if(path.endsWith('/user')) { if(body.password)u.password=body.password;return reply(session(u).user); }
+   if(path.endsWith('/bp_snapshot'))return reply(snapshot(u));
+   if(path.endsWith('/bp_action')){
+    const a=body.args;let result=null;
+    if(body.operation==='property'){
+     result=crypto.randomUUID();properties.push({...a,id:result,landlordId:u.id,code:'BP-CONTRACT-TEST',latitude:null,longitude:null});
+    } else if(body.operation==='payment'){
+     result=crypto.randomUUID();payments.push({...a,id:result,state:'pending',submittedAt:now()});
+    } else if(body.operation==='review'){
+     const p=payments.find(p=>p.id===a.id);assert(p);p.state=a.confirm?'confirmed':'rejected';p.reviewedAt=now();
+     const t=tenancies.find(t=>t.id===p.tenancyId);notices.push({id:crypto.randomUUID(),userId:t.userId,title:'Payment confirmed',message:'Receipt available',createdAt:now(),read:false});
+    } else throw Error('Unexpected command: '+body.operation);
+    return reply({result});
+   }
+   throw Error('Unexpected test API route: '+path);
   });
-  await page.screenshot({path:evidence+'/04-simulated-location.png'});
-  await button('Back');await button('Back');await logout();
-  await login('TENANT','tenant@demo.test');
-  await button('Notifications (2)');
-  await page.waitForFunction(() => [...document.querySelectorAll('[aria-label]')].some(e => (e.getAttribute('aria-label') || '').includes('Payment confirmed')));
-  await page.screenshot({path:evidence+'/05-notifications.png'});
-  assert.match(await page.evaluate(() => [...document.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label')).join(' ')),/Rent reminder/);
-  await button('Mark as read');
-  await button('Back');await button('Payment history');
-  await page.getByText('Demo Tenant • R 1500.00',{exact:false}).click();
-  await text('CONFIRMED');
-  const downloaded=page.waitForEvent('download');
-  await button('Download / share receipt');
-  const download=await downloaded;
-  assert.match(download.suggestedFilename(),/\.pdf$/);
-  const bytes=fs.readFileSync(await download.path());
-  assert.equal(bytes.subarray(0,4).toString(),'%PDF');
-  fs.writeFileSync(evidence+'/confirmed-receipt.pdf',bytes);
-  await button('Back to dashboard');
-  await button('Rental details');
-  await button('Monthly rental account');
-  const statementEvent=page.waitForEvent('download');
-  await button('Download account statement');
-  const statement=await statementEvent;
-  const statementBytes=fs.readFileSync(await statement.path());
-  assert.equal(statementBytes.subarray(0,4).toString(),'%PDF');
-  fs.writeFileSync(evidence+'/monthly-account.pdf',statementBytes);
-  await button('Back');await button('Back');
-  await page.reload();
-  const placeholder=page.locator('flt-semantics-placeholder');
-  await placeholder.waitFor({state:'attached'});await placeholder.evaluate(e=>e.click());
-  await text('Tenant dashboard');await page.waitForFunction(() => document.body.innerText.includes('Outstanding: R 0.00'));
-  await page.screenshot({path:process.env.SCREENSHOT_PATH || evidence+'/06-tenant-dashboard.png'});
-  assert.deepEqual(errors,[]);
-  console.log('Browser smoke passed: account switching, payment approval, reminder, simulated geolocation, PDF download and persistence at 1440px.');
-  await browser.close();
-})().catch(async e=>{ console.error(e); if(activePage) { console.log('Failure screen',await activePage.locator('body').innerText()); await activePage.screenshot({path:'/tmp/backyardpay-smoke-failure.png'}); } if(activeBrowser) await activeBrowser.close(); process.exit(1); });
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+  await page.goto(process.env.APP_URL||'http://127.0.0.1:8080/');await page.locator('flt-semantics-placeholder').waitFor();await page.locator('flt-semantics-placeholder').evaluate(e=>e.click());
+  return page;
+ };
+ const button=async(page,name)=>{
+  console.log('Click',name);const b=page.getByRole('button',{name,exact:true}).first();
+  for(let i=0;i<16;i++){
+   const box=await b.count()?await b.boundingBox():null;
+   if(box&&box.y>=0&&box.y+box.height<=1000)break;
+   await page.mouse.move(1050,700);await page.mouse.wheel(0,box&&box.y<0?-650:650);await page.waitForTimeout(120);
+  }
+  await b.click();await page.mouse.move(1400,980);await page.waitForTimeout(350);
+ };
+ const fill=async(page,name,value)=>{const field=page.getByRole('textbox',{name,exact:true});await field.click();await page.waitForTimeout(120);await page.keyboard.press('Control+A');await page.keyboard.type(value);};
+ const register=async(page,role,email)=>{
+  await button(page,'GET STARTED');await button(page,role);await button(page,'Create an account');
+  await fill(page,'Full name',role==='LANDLORD'?'Owner Test':'Tenant Test');await fill(page,'Phone number','0711234567');await fill(page,'Email',email);await fill(page,'Password','TestPassword123!');await fill(page,'Confirm password','TestPassword123!');
+  if(role==='TENANT'){await fill(page,'Property code from your landlord','BP-CONTRACT-TEST');await fill(page,'Room number','1');}
+  await button(page,'Create account');await page.getByText(role==='LANDLORD'?'Landlord dashboard':'Tenant dashboard',{exact:true}).waitFor();
+ };
+ const owner=await make();assert(!((await owner.locator('body').innerText()).toLowerCase().includes('demo')));
+ await register(owner,'LANDLORD','owner@contract.test');await button(owner,'My properties');await button(owner,'Add property');
+ for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2']])await fill(owner,name,value);
+ await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();await button(owner,'Back');
+ const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');
+ await button(tenant,'Record payment');await button(tenant,'Submit payment');await tenant.getByText(/^PENDING$/).first().waitFor();
+ await button(owner,'Refresh records');await button(owner,'Payment records');await owner.getByText('Tenant Test • R 1500.00',{exact:false}).click();
+ await button(owner,'Confirm payment');await button(owner,'Confirm received');await owner.getByText(/^CONFIRMED$/).first().waitFor();
+ await button(tenant,'Back to dashboard');await button(tenant,'Refresh records');
+ assert((await tenant.locator('body').innerText()).includes('Outstanding: R 0.00'));
+ await button(tenant,'Payment history');await tenant.getByText('Tenant Test • R 1500.00',{exact:false}).click();
+ const downloadPromise=tenant.waitForEvent('download');await button(tenant,'Download / share receipt');const download=await downloadPromise;
+ const bytes=fs.readFileSync(await download.path());assert.equal(bytes.subarray(0,4).toString(),'%PDF');fs.writeFileSync(dir+'/receipt.pdf',bytes);
+ await tenant.screenshot({path:dir+'/confirmed-payment.png'});
+ await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
+ assert((await tenant.locator('body').innerText()).includes('Outstanding: R 0.00'));
+ await button(tenant,'Profile');await button(tenant,'Logout');await button(tenant,'GET STARTED');await button(tenant,'TENANT');await button(tenant,'Forgot password?');
+ await fill(tenant,'Email','tenant@contract.test');await button(tenant,'Send reset link');
+ assert.equal(recoveryEmail,'tenant@contract.test');
+ await tenant.goto((process.env.APP_URL||'http://127.0.0.1:8080/')+'?code=test-only-recovery');
+ await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());
+ await tenant.getByText('Choose your new password',{exact:true}).waitFor();
+ await fill(tenant,'New password','ReplacementPass123!');await fill(tenant,'Confirm new password','ReplacementPass123!');await button(tenant,'Save password and sign in');
+ assert(!tenant.url().includes('code='),'One-use auth code removed from URL');
+ await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());
+ await button(tenant,'GET STARTED');await button(tenant,'TENANT');await fill(tenant,'Email','tenant@contract.test');await fill(tenant,'Password','ReplacementPass123!');await button(tenant,'Login');await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
+ assert.deepEqual(errors,[]);assert.equal(users.length,2);assert.equal(payments[0].state,'confirmed');
+ console.log('Cloud browser/API contract passed: two isolated browser sessions, registration, property, tenant allocation, payment approval, refresh, PDF, restored Auth session, password recovery callback and reload. Transport simulated; hosted email and database activation remain unverified.');
+ await browser.close();
+})().catch(async e=>{console.error(e);if(browser)await browser.close();process.exit(1);});

@@ -134,40 +134,9 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                         gap(22),
                         const Divider(),
-                        if (!StoreScope.of(context).hasAccounts)
-                          action(
-                            busy ? 'Creating demo…' : 'Try with demo accounts',
-                            busy
-                                ? null
-                                : () async {
-                                    setState(() => busy = true);
-                                    await perform(
-                                      context,
-                                      () => StoreScope.of(context).createDemo(),
-                                      success: 'Demo accounts created. Use the details shown below.',
-                                    );
-                                    if (mounted) setState(() => busy = false);
-                                  },
-                            icon: Icons.science_outlined,
-                          ),
-                        ExpansionTile(
-                          tilePadding: EdgeInsets.zero,
-                          title: const Text(
-                            'Demo sign-in details',
-                            style: TextStyle(fontSize: 13),
-                          ),
-                          children: const [
-                            Padding(
-                              padding: EdgeInsets.only(bottom: 16),
-                              child: SelectableText(
-                                'Landlord: landlord@demo.test\nTenant: tenant@demo.test\nPassword: DemoPass123!\nCreate demo accounts first on an empty device.',
-                              ),
-                            ),
-                          ],
-                        ),
                         gap(),
                         const Text(
-                          'Records stay on this browser/device. BackyardPay records payments; it never moves money.',
+                          'Your records are saved to your account. BackyardPay records payments; it never moves money.',
                           style: TextStyle(
                             color: Palette.muted,
                             fontSize: 11,
@@ -359,7 +328,7 @@ class _AuthScreenState extends State<AuthScreen> {
       gap(16),
       heading(registration ? 'Make yourself at home.' : 'Welcome back.'),
       const Text(
-        'Your rental records, securely organised on this device.',
+        'Your rental records, connected across your devices.',
         style: TextStyle(color: Palette.muted),
       ),
       gap(20),
@@ -414,14 +383,69 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             if (!registration)
               TextButton(
-                onPressed: () => tell(
-                  context,
-                  'This local prototype has no email reset service. Change your password from Profile while signed in. Keep your demo credentials for rehearsal.',
-                ),
+                onPressed: busy
+                    ? null
+                    : () => open(context, const PasswordResetRequestScreen()),
                 child: const Text('Forgot password?'),
               ),
           ],
         ),
+      ),
+    ],
+  );
+}
+
+class PasswordResetRequestScreen extends StatefulWidget {
+  const PasswordResetRequestScreen({super.key});
+  @override
+  State<PasswordResetRequestScreen> createState() =>
+      _PasswordResetRequestScreenState();
+}
+
+class _PasswordResetRequestScreenState
+    extends State<PasswordResetRequestScreen> {
+  final email = TextEditingController();
+  bool busy = false, sent = false;
+  @override
+  void dispose() {
+    email.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PageShell(
+    title: 'Reset password',
+    maxWidth: 600,
+    children: [
+      heading('Get back into your account'),
+      const Text(
+        'Enter your account email. If an account exists, you will receive a password reset link.',
+      ),
+      gap(20),
+      TextField(
+        controller: email,
+        keyboardType: TextInputType.emailAddress,
+        decoration: const InputDecoration(labelText: 'Email'),
+      ),
+      gap(16),
+      if (sent)
+        const Text('Check your inbox and spam folder for a reset link.'),
+      action(
+        busy ? 'Sending…' : 'Send reset link',
+        busy
+            ? null
+            : () async {
+                setState(() => busy = true);
+                final ok = await perform(
+                  context,
+                  () => StoreScope.of(context).resetPassword(email.text),
+                );
+                if (mounted)
+                  setState(() {
+                    busy = false;
+                    sent = ok;
+                  });
+              },
       ),
     ],
   );

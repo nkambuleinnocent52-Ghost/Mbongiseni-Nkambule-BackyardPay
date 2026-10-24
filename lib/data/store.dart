@@ -1,4 +1,9 @@
 import 'dart:convert';
+
+import 'cloud_gateway.dart';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
@@ -28,7 +33,49 @@ class PreferencesStorage implements DataStorage {
 
 class AppStore extends ChangeNotifier {
   final DataStorage storage;
-  AppStore(this.storage);
+  AppStore(this.storage, {this.cloud});
+  final CloudGateway? cloud;
+  bool get isCloud => cloud != null;
+  String? syncError;
+  DateTime? lastSyncedAt;
+  Future<void> refresh() async {
+    if (cloud == null || _writing) return;
+    final userId = cloud!.client.auth.currentUser?.id;
+    try {
+      final data = await cloud!.snapshot();
+      if (cloud!.client.auth.currentUser?.id != userId) return;
+      _restore(jsonEncode(data));
+      syncError = null;
+      lastSyncedAt = DateTime.now();
+      notifyListeners();
+    } catch (_) {
+      syncError = 'Could not refresh records. Check your connection. The last loaded records are shown.';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<dynamic> _remote(String op, Map<String, dynamic> args) async {
+    if (_writing)
+      throw StateError('Another change is saving. Please try again.');
+    _writing = true;
+    final userId = cloud!.client.auth.currentUser?.id;
+    try {
+      final response = await cloud!.action(op, args);
+      if (cloud!.client.auth.currentUser?.id != userId)
+        throw StateError(
+          'Your session changed. Sign in and reload your records.',
+        );
+      _restore(jsonEncode(response['snapshot']));
+      syncError = null;
+      lastSyncedAt = DateTime.now();
+      notifyListeners();
+      return response['result'];
+    } finally {
+      _writing = false;
+    }
+  }
+
   List<Account> _accounts = [];
   List<RentalProperty> _properties = [];
   List<Tenancy> _tenancies = [];
@@ -48,6 +95,10 @@ class AppStore extends ChangeNotifier {
   );
 
   Future<void> load() async {
+    if (cloud != null) {
+      await refresh();
+      return;
+    }
     final raw = await storage.read();
     if (raw != null) _restore(raw);
     notifyListeners();
@@ -151,6 +202,29 @@ class AppStore extends ChangeNotifier {
     String code = '',
     String room = '',
   }) async {
+    if (cloud != null) {
+      _identity(name, email, phone);
+      _passwordRules(password);
+      final response = await cloud!.client.auth.signUp(
+        email: email.trim().toLowerCase(),
+        password: password,
+        data: {
+          'name': name.trim(),
+          'phone': phone.trim(),
+          'role': role.name,
+          'code': code.trim().toUpperCase(),
+          'room': room.trim(),
+        },
+        emailRedirectTo: 'https://quiet-pastelito-19fa50.netlify.app/',
+      );
+      if (response.session == null) {
+        throw StateError(
+          'Check your email to confirm your account, then return here and sign in. If already registered, sign in or reset your password.',
+        );
+      }
+      await refresh();
+      return;
+    }
     _identity(name, email, phone);
     _passwordRules(password);
     final normalized = email.trim().toLowerCase();
@@ -215,6 +289,23 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password, Role role) async {
+    if (cloud != null) {
+      await cloud!.client.auth.signInWithPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+      try {
+        await refresh();
+        if (currentUser?.role != role)
+          throw StateError('Choose the correct role for your account.');
+      } catch (_) {
+        await cloud!.client.auth.signOut();
+        _restore(jsonEncode(CloudGateway.emptySnapshot));
+        notifyListeners();
+        rethrow;
+      }
+      return;
+    }
     final account = _accounts
         .where((a) => a.email == email.trim().toLowerCase() && a.role == role)
         .firstOrNull;
@@ -228,10 +319,36 @@ class AppStore extends ChangeNotifier {
     await _transaction(() => _session = account.id);
   }
 
-  Future<void> logout() async => _transaction(() {
-    _session = null;
-  });
+  Future<void> logout() async {
+    if (cloud != null) {
+      await cloud!.client.auth.signOut();
+      _restore(jsonEncode(CloudGateway.emptySnapshot));
+      notifyListeners();
+      return;
+    }
+    await _transaction(() => _session = null);
+  }
+
+  Future<void> resetPassword(String email) async {
+    if (cloud == null)
+      throw StateError('Email recovery requires the cloud connection.');
+    await cloud!.client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: 'https://quiet-pastelito-19fa50.netlify.app/',
+    );
+  }
+
+  Future<void> completePasswordReset(String password) async {
+    _passwordRules(password);
+    await cloud!.client.auth.updateUser(UserAttributes(password: password));
+    await logout();
+  }
+
   Future<void> updateProfile(String name, String phone) async {
+    if (cloud != null) {
+      await _remote('profile', {'name': name.trim(), 'phone': phone.trim()});
+      return;
+    }
     final a = _user();
     _identity(name, a.email, phone);
     await _transaction(() {
@@ -248,6 +365,17 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
+    if (cloud != null) {
+      _passwordRules(newPassword);
+      await cloud!.client.auth.signInWithPassword(
+        email: currentUser!.email,
+        password: oldPassword,
+      );
+      await cloud!.client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      return;
+    }
     final a = _user();
     _passwordRules(newPassword);
     if (!_equal(await _password(oldPassword, a.salt), a.passwordHash))
@@ -335,17 +463,24 @@ class AppStore extends ChangeNotifier {
       createdAt: DateTime.now(),
     ),
   );
-  Future<void> markRead(String id) async => _transaction(() {
-    final n = notices.firstWhere((n) => n.id == id);
-    _notices[_notices.indexOf(n)] = AppNotice(
-      id: n.id,
-      userId: n.userId,
-      title: n.title,
-      message: n.message,
-      createdAt: n.createdAt,
-      read: true,
-    );
-  });
+  Future<void> markRead(String id) async {
+    if (cloud != null) {
+      await _remote('read', {'id': id});
+      return;
+    }
+    await _transaction(() {
+      final n = notices.firstWhere((n) => n.id == id);
+      _notices[_notices.indexOf(n)] = AppNotice(
+        id: n.id,
+        userId: n.userId,
+        title: n.title,
+        message: n.message,
+        createdAt: n.createdAt,
+        read: true,
+      );
+    });
+  }
+
   Future<String> saveProperty({
     String? id,
     required String name,
@@ -357,6 +492,18 @@ class AppStore extends ChangeNotifier {
     String city = '',
     String postalCode = '',
   }) async {
+    if (cloud != null)
+      return await _remote('property', {
+        'id': id,
+        'name': name.trim(),
+        'address': address.trim(),
+        'rooms': rooms,
+        'rentCents': rentCents,
+        'dueDay': dueDay,
+        'suburb': suburb.trim(),
+        'city': city.trim(),
+        'postalCode': postalCode.trim(),
+      }) as String;
     final a = _user(Role.landlord);
     if (name.trim().length < 2 ||
         name.trim().length > 100 ||
@@ -405,6 +552,10 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> deleteProperty(String id) async {
+    if (cloud != null) {
+      await _remote('deleteProperty', {'id': id});
+      return;
+    }
     _user(Role.landlord);
     final p = property(id);
     if (_tenancies.any((t) => t.propertyId == id))
@@ -417,6 +568,14 @@ class AppStore extends ChangeNotifier {
     double latitude,
     double longitude,
   ) async {
+    if (cloud != null) {
+      await _remote('location', {
+        'id': id,
+        'latitude': latitude,
+        'longitude': longitude,
+      });
+      return;
+    }
     _user(Role.landlord);
     final p = property(id);
     if (!latitude.isFinite ||
@@ -492,6 +651,17 @@ class AppStore extends ChangeNotifier {
     String notes = '',
     String bankReference = '',
   }) async {
+    if (cloud != null)
+      return await _remote('payment', {
+        'tenancyId': tenancyId,
+        'period': period,
+        'amountCents': amountCents,
+        'method': method,
+        'paidOn': paidOn.toIso8601String().split('T').first,
+        'reference': reference.trim(),
+        'notes': notes.trim(),
+        'bankReference': bankReference.trim(),
+      }) as String;
     final a = _user(Role.tenant), t = tenancy(tenancyId);
     if (t.userId != a.id)
       throw StateError('You can only submit your own payments.');
@@ -566,6 +736,14 @@ class AppStore extends ChangeNotifier {
     required bool confirm,
     String reason = '',
   }) async {
+    if (cloud != null) {
+      await _remote('review', {
+        'id': id,
+        'confirm': confirm,
+        'reason': reason.trim(),
+      });
+      return;
+    }
     _user(Role.landlord);
     await _transaction(() {
       final p = payment(id), t = tenancy(p.tenancyId);
@@ -604,6 +782,14 @@ class AppStore extends ChangeNotifier {
     String period,
     String message,
   ) async {
+    if (cloud != null) {
+      await _remote('reminder', {
+        'tenancyId': tenancyId,
+        'period': period,
+        'message': message.trim(),
+      });
+      return;
+    }
     _user(Role.landlord);
     final t = tenancy(tenancyId);
     periodDate(period);
@@ -680,6 +866,21 @@ class AppStore extends ChangeNotifier {
     String emergencyName = '',
     String emergencyPhone = '',
   }) async {
+    if (cloud != null) {
+      await _remote('agreement', {
+        'tenancyId': tenancyId,
+        'start': start.toIso8601String().split('T').first,
+        'end': end?.toIso8601String().split('T').first,
+        'agreementType': agreementType,
+        'depositCents': depositCents,
+        'depositReceivedCents': depositReceivedCents,
+        'utilities': utilities.trim(),
+        'houseRules': houseRules.trim(),
+        'emergencyName': emergencyName.trim(),
+        'emergencyPhone': emergencyPhone.trim(),
+      });
+      return;
+    }
     _user(Role.landlord);
     final t = tenancy(tenancyId);
     final current = DateTime.now();
@@ -773,6 +974,10 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> acknowledgeAgreement(String tenancyId) async {
+    if (cloud != null) {
+      await _remote('acknowledge', {'tenancyId': tenancyId});
+      return;
+    }
     final a = _user(Role.tenant), t = tenancy(tenancyId);
     if (t.userId != a.id || !t.agreementRecorded)
       throw StateError(
@@ -792,98 +997,4 @@ class AppStore extends ChangeNotifier {
   }
 
   String get newReference => 'BP-${_uuid.v4().substring(0, 13).toUpperCase()}';
-  Future<void> createDemo() async {
-    if (hasAccounts)
-      throw StateError('Demo data can only be created in an empty app.');
-    final ownerSalt = _salt(), tenantSalt = _salt();
-    final ownerHash = await _password('DemoPass123!', ownerSalt);
-    final tenantHash = await _password('DemoPass123!', tenantSalt);
-    await _transaction(() {
-      if (hasAccounts)
-        throw StateError('Accounts already exist; no demo data was added.');
-      final ownerId = _uuid.v4(),
-          tenantId = _uuid.v4(),
-          propertyId = _uuid.v4();
-      final now = DateTime.now();
-      final start = DateTime(now.year, now.month - 3, 1);
-      final demoTenancyId = _uuid.v4();
-      _accounts.addAll([
-        Account(
-          id: ownerId,
-          name: 'Demo Landlord',
-          phone: '0710000001',
-          email: 'landlord@demo.test',
-          salt: ownerSalt,
-          passwordHash: ownerHash,
-          role: Role.landlord,
-        ),
-        Account(
-          id: tenantId,
-          name: 'Demo Tenant',
-          phone: '0710000002',
-          email: 'tenant@demo.test',
-          salt: tenantSalt,
-          passwordHash: tenantHash,
-          role: Role.tenant,
-        ),
-      ]);
-      _properties.add(
-        RentalProperty(
-          id: propertyId,
-          landlordId: ownerId,
-          name: 'BackyardPay Demo Rooms',
-          address: '12 Example Lane (fictional demo address)',
-          suburb: 'Southernwood',
-          city: 'East London, Eastern Cape',
-          postalCode: '5201',
-          code: 'BP-${_uuid.v4().substring(0, 8).toUpperCase()}',
-          rooms: 4,
-          rentCents: 150000,
-          dueDay: 1,
-        ),
-      );
-      _tenancies.add(
-        Tenancy(
-          id: demoTenancyId,
-          userId: tenantId,
-          propertyId: propertyId,
-          room: '1',
-          startPeriod: periodOf(start),
-          leaseStart: start,
-          agreementType: 'Month-to-month',
-          depositCents: 150000,
-          depositReceivedCents: 150000,
-          utilities:
-              'Demo: tenant pays prepaid electricity; water is included.',
-          houseRules:
-              'Demo terms only: one month notice; keep shared areas clean.',
-          termsUpdatedAt: start,
-          acknowledgedAt: start,
-          rentCents: 150000,
-          dueDay: 1,
-        ),
-      );
-      // Clearly fictional history is created only by the explicit empty-store demo action.
-      for (var i = 0; i < 3; i++) {
-        final date = DateTime(start.year, start.month + i, 1);
-        _payments.add(
-          RentPayment(
-            id: _uuid.v4(),
-            tenancyId: demoTenancyId,
-            period: periodOf(date),
-            method: 'EFT',
-            reference: 'DEMO-${periodOf(date)}',
-            bankReference: 'DEMO-BANK-${periodOf(date)}',
-            notes:
-                'Fictional demonstration history; no bank transfer was made.',
-            amountCents: i == 2 ? 90000 : 150000,
-            paidOn: date,
-            submittedAt: date,
-            state: ReviewState.confirmed,
-            reviewedAt: date,
-          ),
-        );
-      }
-    });
-  }
 }

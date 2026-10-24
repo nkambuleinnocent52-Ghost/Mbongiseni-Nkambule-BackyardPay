@@ -64,7 +64,7 @@ class ProfileScreen extends StatelessWidget {
         }, icon: Icons.logout),
         panel(
           const Text(
-            'Local academic prototype. Data stays on this browser/device; clearing browser storage removes it. Use fictional details for demonstrations. Email account recovery and cross-device sync are not available.',
+            'Your rental records are saved to your Supabase account and shared with the relevant landlord or tenant. Payments are recorded here; money transfers take place through your bank or in cash.',
           ),
         ),
       ],

@@ -157,7 +157,7 @@ Future<Uint8List> accountStatementPdf(AppStore store, String tenancyId) async {
         ),
         pw.SizedBox(height: 12),
         pw.Text(
-          'Only landlord-confirmed payments reduce the balance. A pending submission does not prove receipt of money. Deposits are kept separate from rent. Full calendar-month charges apply in this prototype.',
+          'Only landlord-confirmed payments reduce the balance. A pending submission does not prove receipt of money. Deposits are kept separate from rent. Full calendar-month charges apply.',
         ),
       ],
     ),

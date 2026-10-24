@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/store.dart';
 import '../models/models.dart';
@@ -34,7 +35,15 @@ class PageShell extends StatelessWidget {
     final content = Scaffold(
       appBar: AppBar(
         title: Text(title),
-        actions: actions,
+        actions: [
+          if (store.isCloud && user != null)
+            IconButton(
+              tooltip: 'Refresh records',
+              onPressed: () => perform(context, store.refresh),
+              icon: const Icon(Icons.sync),
+            ),
+          ...?actions,
+        ],
         centerTitle: false,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -50,7 +59,17 @@ class PageShell extends StatelessWidget {
               padding: EdgeInsets.all(
                 MediaQuery.sizeOf(context).width < 600 ? 18 : 30,
               ),
-              children: children,
+              children: [
+                if (store.isCloud && store.syncError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      store.syncError!,
+                      style: const TextStyle(color: Palette.red),
+                    ),
+                  ),
+                ...children,
+              ],
             ),
           ),
         ),
@@ -234,10 +253,30 @@ void open(BuildContext context, Widget page) =>
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
 void home(BuildContext context) =>
     Navigator.of(context).popUntil((r) => r.isFirst);
-String errorText(Object error) => error.toString().replaceFirst(
-  RegExp(r'^(Invalid argument\(s\)|Bad state|FormatException|Exception): ?'),
-  '',
-);
+String errorText(Object error) {
+  if (error is AuthException) {
+    if (error.message.toLowerCase().contains('database error saving'))
+      return 'Account could not be created. Check the property code and room availability with your landlord, then try again.';
+    return error.message;
+  }
+  if (error is PostgrestException) {
+    if (error.code == '23505')
+      return 'That reference or record already exists. Refresh your records before trying again.';
+    if (error.code == '23514' || error.code == '23502' || error.code == '22P02')
+      return 'Check the required fields, amounts and dates.';
+    if (error.code == 'PGRST202' || error.code == '42P01')
+      return 'The cloud database setup is not complete yet. Ask the project owner to run the BackyardPay setup script.';
+    if (error.code == '42501')
+      return 'You do not have access to this action. Sign in and try again.';
+    if (error.code == 'P0001') return error.message;
+    return 'Your records could not be saved. Check your connection, refresh, and try again.';
+  }
+  return error.toString().replaceFirst(
+    RegExp(r'^(Invalid argument\(s\)|Bad state|FormatException|Exception): ?'),
+    '',
+  );
+}
+
 void tell(BuildContext context, String message) =>
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));

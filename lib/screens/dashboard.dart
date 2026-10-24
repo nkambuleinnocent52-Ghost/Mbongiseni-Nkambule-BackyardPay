@@ -743,7 +743,7 @@ void reminder(BuildContext context, String tenancyId, String period) {
     EditorPage(
       title: 'Send rent reminder',
       button: 'Send reminder',
-      help: 'A notification is delivered to this tenant’s account on this device. No SMS is sent.',
+      help: 'A notification is delivered to this tenant’s account. No SMS is sent.',
       fields: [
         FieldSpec('period', 'Rent month (YYYY-MM)', initial: period),
         FieldSpec(

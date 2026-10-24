@@ -5,12 +5,13 @@ import 'package:mbongiseni_nkambule_apt_application/main.dart';
 import 'package:mbongiseni_nkambule_apt_application/models/models.dart';
 
 import 'test_storage.dart';
+import 'fixtures.dart';
 
 void main() {
   late AppStore store;
   setUp(() async {
     store = AppStore(MemoryStorage());
-    await store.createDemo();
+    await seedTestAccounts(store);
     await store.login('tenant@demo.test', 'DemoPass123!', Role.tenant);
   });
   tearDown(() => store.dispose());

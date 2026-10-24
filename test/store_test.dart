@@ -303,19 +303,22 @@ void main() {
     expect(store.dueDate(t, period).day, 1);
     expect(store.property(propertyId).rentCents, 200000);
   });
-  test('demo creation is atomic and does not sign the user in', () async {
-    final memory = MemoryStorage();
-    final demo = AppStore(memory);
-    memory.failWrites = true;
-    await expectLater(demo.createDemo(), throwsStateError);
-    expect(demo.hasAccounts, isFalse);
-    memory.failWrites = false;
-    await demo.createDemo();
-    expect(demo.currentUser, isNull);
-    await demo.login('tenant@demo.test', 'DemoPass123!', Role.tenant);
-    expect(demo.tenancies.single.rentCents, 150000);
-    await expectLater(demo.createDemo(), throwsStateError);
-    demo.dispose();
+  test('registration rolls back on storage failure', () async {
+    final memory = MemoryStorage()..failWrites = true;
+    final isolated = AppStore(memory);
+    await expectLater(
+      isolated.register(
+        name: 'New Landlord',
+        email: 'new@example.test',
+        phone: '0711234567',
+        password: 'Password123!',
+        role: Role.landlord,
+      ),
+      throwsStateError,
+    );
+    expect(isolated.hasAccounts, isFalse);
+    expect(isolated.currentUser, isNull);
+    isolated.dispose();
   });
   Future<void> recordTerms({
     DateTime? end,
