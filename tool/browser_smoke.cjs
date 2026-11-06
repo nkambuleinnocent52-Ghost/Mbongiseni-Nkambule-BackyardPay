@@ -14,7 +14,7 @@ const snapshot=u=>{
  const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
  const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
  const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
- return {version:1,session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+ return {version:1,researchVersion:2,rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:[],session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
 };
 let browser;
 let recoveryEmail;
@@ -51,7 +51,7 @@ let recoveryEmail;
     } else if(body.operation==='payment'){
      result=crypto.randomUUID();payments.push({...a,id:result,state:'pending',submittedAt:now()});
     } else if(body.operation==='review'){
-     const p=payments.find(p=>p.id===a.id);assert(p);p.state=a.confirm?'confirmed':'rejected';p.reviewedAt=now();
+     const p=payments.find(p=>p.id===a.id);assert(p);result=p.id;p.state=a.confirm?'confirmed':'rejected';p.reviewedAt=now();if(a.allocations)p.allocations=a.allocations;p.receiptDetails={tenant:'Tenant Test',landlord:'Owner Test',landlordAddress:'1 Owner Street',property:'My Real Rooms',address:'1 Test Street, Southernwood, East London, 5201',room:'1',issuedAllocations:p.allocations,issuedCreditCents:0};
      const t=tenancies.find(t=>t.id===p.tenancyId);notices.push({id:crypto.randomUUID(),userId:t.userId,title:'Payment confirmed',message:'Receipt available',createdAt:now(),read:false});
     } else throw Error('Unexpected command: '+body.operation);
     return reply({result});
@@ -75,7 +75,7 @@ let recoveryEmail;
  const register=async(page,role,email)=>{
   await button(page,'GET STARTED');await button(page,role);await button(page,'Create an account');
   await fill(page,'Full name',role==='LANDLORD'?'Owner Test':'Tenant Test');await fill(page,'Phone number','0711234567');await fill(page,'Email',email);await fill(page,'Password','TestPassword123!');await fill(page,'Confirm password','TestPassword123!');
-  if(role==='TENANT'){await fill(page,'Property code from your landlord','BP-CONTRACT-TEST');await fill(page,'Room number','1');}
+  if(role==='TENANT'){await fill(page,'Property code or private tenant invitation','BP-CONTRACT-TEST');await fill(page,'Room number','1');}
   await button(page,'Create account');await page.getByText(role==='LANDLORD'?'Landlord dashboard':'Tenant dashboard',{exact:true}).waitFor();
  };
  const owner=await make();assert(!((await owner.locator('body').innerText()).toLowerCase().includes('demo')));
@@ -85,15 +85,16 @@ let recoveryEmail;
  const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');
  await button(tenant,'Record payment');await button(tenant,'Submit payment');await tenant.getByText(/^PENDING$/).first().waitFor();
  await button(owner,'Refresh records');await button(owner,'Payment records');await owner.getByText('Tenant Test • R 1500.00',{exact:false}).click();
- await button(owner,'Confirm payment');await button(owner,'Confirm received');await owner.getByText(/^CONFIRMED$/).first().waitFor();
+ await button(owner,'Confirm payment');const cb=owner.getByRole('checkbox');for(let i=0;i<12;i++){const b=await cb.boundingBox();if(b&&b.y>0&&b.y+b.height<950)break;await owner.mouse.move(1050,700);await owner.mouse.wheel(0,400);await owner.waitForTimeout(150);}await cb.click();await button(owner,'Confirm received');await owner.getByText(/^CONFIRMED$/).first().waitFor();
  await button(tenant,'Back to dashboard');await button(tenant,'Refresh records');
- assert((await tenant.locator('body').innerText()).includes('Outstanding: R 0.00'));
+ assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'));
  await button(tenant,'Payment history');await tenant.getByText('Tenant Test • R 1500.00',{exact:false}).click();
  const downloadPromise=tenant.waitForEvent('download');await button(tenant,'Download / share receipt');const download=await downloadPromise;
  const bytes=fs.readFileSync(await download.path());assert.equal(bytes.subarray(0,4).toString(),'%PDF');fs.writeFileSync(dir+'/receipt.pdf',bytes);
  await tenant.screenshot({path:dir+'/confirmed-payment.png'});
+ await tenant.setViewportSize({width:390,height:844});await tenant.screenshot({path:dir+'/tenant-phone.png'});await tenant.setViewportSize({width:1440,height:1000});
  await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
- assert((await tenant.locator('body').innerText()).includes('Outstanding: R 0.00'));
+ assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'));
  await button(tenant,'Profile');await button(tenant,'Logout');await button(tenant,'GET STARTED');await button(tenant,'TENANT');await button(tenant,'Forgot password?');
  await fill(tenant,'Email','tenant@contract.test');await button(tenant,'Send reset link');
  assert.equal(recoveryEmail,'tenant@contract.test');

@@ -2,28 +2,29 @@
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
-## Black and gold redesign
+## Research-aligned update — 6 November 2026
 
-The responsive charcoal and gold interface includes separate landlord/tenant dashboards, collection trends, room occupancy, unpaid tenant status, and a monthly rental ledger with downloadable account statements. Rental records include dates, deposits, utilities, rules, contact details and a tenant read acknowledgement. EFT/PayShap bank references are separate from app references; a rent allocation acknowledgement does not replace bank proof. The cloud version starts with your registered accounts; it does not upload old browser sample records.
+The black/gold design is retained. See the [research implementation audit](docs/research/Implementation-Audit-2026-11-06.md) for every lecturer comment, evidence limits and the project marking-guide crosswalk.
 
-See [the lecturer feedback response](docs/lecturer-feedback-response.md) for the problem statement, implemented improvements and remaining limitations.
+- Landlords create tenant/room records without creating passwords or requiring the tenant to install the app. A private invitation links a tenant account to existing history; tenants retain previous rentals when joining another after handover.
+- One actual payment has an actual payer and explicit allocations across charge months, with unallocated credit. Landlords record received cash/bank money; tenant reports await reconciliation. Deposits are separate.
+- Monthly account statements retain charges, partial payments, unpaid months, dated rates and documented adjustments. Planned lease expiry and actual handover are separate.
+- Full lease particulars, formal addresses, payment instructions, deposit receipts/interest/refunds/deductions, inspection records, repairs/account queries, audit history and private PDF/image evidence are supported.
+- Rental receipts identify the same money as bank evidence and explain allocation; they do not claim bank verification. Original issue details remain fixed. Evidenced full returns/reversals retain the record and update balances.
+- Separate stakeholder dashboards show relevant records, credit, attention items and actions. Location, optional active-browser alerts and in-app notifications remain.
 
-## Working features
+## Activate the update
 
-- Landlord and tenant registration with email confirmation, login, profile editing, password changes, email reset links and logout through Supabase Auth.
-- Supabase authentication and shared PostgreSQL properties, room assignments, payments and notifications, protected by RLS and server-side commands.
-- Property creation/editing/deletion of empty properties; property codes and occupied-room validation.
-- Tenant payment submission by rent month and method; all methods await landlord review. Landlords confirm or reject with a reason.
-- Partial payments, month balances, duplicate-reference and overpayment prevention. Pending/rejected submissions never count as collections. Existing tenancy rent and due day remain fixed when property defaults change.
-- Tenant search, payment filters, reminders, notification read status, property location capture and external map view.
-- PDF receipts only for confirmed payments, with bundled Unicode fonts, browser download and platform-supported print/share.
-- Browser notification permission is optional; account notifications are saved in the database. Active screens refresh every 20 seconds and have a manual refresh action.
+1. Export/back up the existing Supabase database. Run [BackyardPay-Research-Update.sql](downloads/BackyardPay-Research-Update.sql) in that project's SQL Editor. It is additive and retains existing accounts/payments. Do not rerun the original migration afterwards, which would restore old RPC definitions.
+2. Upload the contents of [BackyardPay-Research-web.zip](downloads/BackyardPay-Research-web.zip) to Netlify. The ZIP has `index.html` at its root.
+3. Use existing email/password accounts. Keep **Confirm email off** in Supabase's email provider during development if signup must not send confirmation email. This release does not change that project setting.
+4. Check hosted signup, two-account sharing, private file transfer and phone permissions with owner-controlled accounts before inviting others.
+
+For a brand-new database, run `202610240001_backyardpay.sql` once before the Research Update. Never put service/admin credentials into Flutter.
 
 ## Service boundaries
 
-The application records payments and never transfers money. Bank transactions are manually matched by landlords. Supabase project setup and a working email sender are required before inviting real users. The public client key does not grant unrestricted data access: role/ownership rules and payment limits run on the server. No uploaded bank-proof files, background push, SMS or payment gateway are included. Existing browser data is retained locally but not imported into the shared database.
-
-Device notification support is not yet implemented on Android. Android build, real GPS capture and phone print/share need testing on the final demonstration device. Browser location requires HTTPS or a permitted localhost origin, OS/browser permission and a location source; a denied request displays an error and does not invent coordinates.
+The app records money already paid; it does not transfer money, initiate debit orders, reconcile a bank feed or verify an uploaded proof. The supported charging model is monthly rent with documented agreed adjustments. Lease acknowledgement is a read acknowledgement, not a legal signature. Inspection/deposit records do not decide legal rights. Background push, SMS, electricity vending and non-monthly billing are outside this release. Phone installation/location/alerts, hosted Storage and local East London usability research still need direct validation.
 
 ## Develop in the cloud
 
@@ -53,7 +54,7 @@ For normal machines, `flutter analyze` and `dart format lib test tool` are stand
 
 ## Create real accounts
 
-See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email sender and deployment steps. Create a landlord account, confirm the email, create a property, then have the tenant register with its code and an available room. The tenant records payments; only the linked landlord can confirm or reject them. No sample accounts or seed records are created by the application.
+See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email sender and deployment steps. Create a landlord account and a property, then create the tenant record and share its private invitation. Tenants can also register into a genuinely vacant room using the property code. With Confirm email disabled for development, account creation does not wait for confirmation mail. Landlords can record received money directly; tenant-reported money awaits landlord reconciliation. No sample accounts or seed records are created by the application.
 
 ## Architecture and tests
 
@@ -65,7 +66,7 @@ See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email s
 - `test/widget_test.dart`: opening the app, selecting a role and back navigation.
 - `tool/browser_smoke.cjs`: Chromium browser/API contract checks with simulated Supabase transport and two isolated browser sessions. PostgreSQL access rules are tested separately by `bash tool/test_database.sh`. Requires Playwright and Chromium. With a served web build, run `node tool/browser_smoke.cjs`; set `APP_URL` and `CHROME_BIN` to override defaults. It uses isolated test-only fixtures and does not contact or seed the hosted project.
 
-Hosted signup, confirmation/reset email delivery and a real landlord/tenant journey must be checked after the database and SMTP setup. System notification appearance and print dialogs also require manual checks in the user's browser.
+Hosted signup, confirmation/reset email delivery and a real landlord/tenant journey must be checked after the database upgrade and Auth configuration. System notification appearance and print dialogs also require manual checks in the user's browser.
 
 ## Sources
 
@@ -73,7 +74,7 @@ Implementation uses Flutter/Dart, shared_preferences, cryptography, geolocator, 
 
 ## Download the prepared app
 
-- [Compiled website ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Cloud-web.zip?raw=true) — upload the ZIP using the existing Netlify project’s **Already built it? → choose a file** control. Flutter is not required on your PC.
-- [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Cloud-source.zip?raw=true) — editable Flutter project.
+- [Compiled website ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Research-web.zip?raw=true) — upload the ZIP using the existing Netlify project’s **Already built it? → choose a file** control. Flutter is not required on your PC.
+- [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Research-source.zip?raw=true) — editable Flutter project.
 
 The website is not deployed by uploading these files to GitHub. Hosting and Android testing are separate steps.

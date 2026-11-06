@@ -1,3 +1,5 @@
+import 'documents.dart';
+
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
@@ -8,6 +10,8 @@ import 'common.dart';
 import 'dashboard.dart';
 import 'properties.dart';
 import 'payments.dart';
+import 'payment_entry.dart';
+import 'research_records.dart';
 
 class RentalAccountScreen extends StatelessWidget {
   final String tenancyId;
@@ -45,7 +49,7 @@ class RentalAccountScreen extends StatelessWidget {
               ),
               gap(10),
               const Text(
-                'Total rent still owed across recorded months',
+                'Confirmed-record charge balance before unallocated credit',
                 style: TextStyle(color: Palette.muted, fontSize: 12),
               ),
             ],
@@ -60,14 +64,24 @@ class RentalAccountScreen extends StatelessWidget {
               detail('Property', p.name),
               detail('Address', p.fullAddress),
               detail('Room', t.room),
-              detail('Rent', money(t.rentCents)),
+              detail('Base rent', money(t.rentCents)),
+              if (store.researchReady) ...[
+                detail(
+                  'Unallocated received credit',
+                  money(store.creditFor(t)),
+                ),
+                detail(
+                  'Reports awaiting reconciliation',
+                  money(store.pendingFor(t)),
+                ),
+              ],
               detail('Landlord', store.landlordFor(t).name),
               detail('Account begins', monthLabel(t.startPeriod)),
             ],
           ),
         ),
         const Text(
-          'Each month shows the rent charged, confirmed payments and remaining balance. Pending amounts are shown separately. The running balance carries unpaid rent forward; it never counts it twice.',
+          'This view allocates payments to charge months as of today. It is not historical month-end cash flow: a later payment can settle an earlier charge. The cumulative balance carries each charge once. Pending reports are separate and are not proof of nonpayment.',
           style: TextStyle(color: Palette.muted, fontSize: 12, height: 1.8),
         ),
         gap(16),
@@ -82,6 +96,17 @@ class RentalAccountScreen extends StatelessWidget {
           }),
           icon: Icons.download_outlined,
         ),
+        if (store.researchReady) ...[
+          heading('Dated rent terms'),
+          for (final term in store.rentTerms.where(
+            (r) => r['tenancyId'] == t.id,
+          ))
+            panel(
+              Text(
+                '${term['period']} • ${money(term['amountCents'])} • due day ${term['dueDay']}\n${term['evidence']}',
+              ),
+            ),
+        ],
         gap(12),
         if (rows.isEmpty)
           panel(const Text('No rent has been charged for this tenancy yet.')),
@@ -109,10 +134,10 @@ class RentalAccountScreen extends StatelessWidget {
                   spacing: 28,
                   runSpacing: 10,
                   children: [
-                    Text('Rent charged: ${money(row.chargedCents)}'),
+                    Text('Recorded charge: ${money(row.chargedCents)}'),
                     Text('Confirmed: ${money(row.confirmedCents)}'),
                     Text(
-                      'This month owed: ${money(row.outstandingCents)}',
+                      'Recorded balance: ${money(row.outstandingCents)}',
                       style: const TextStyle(color: Palette.goldLight),
                     ),
                   ],
@@ -144,7 +169,7 @@ class RentalAccountScreen extends StatelessWidget {
           ),
         gap(),
         const Text(
-          'Rent is charged by full calendar month. Deposits are recorded separately and never counted as rent. This statement is not a bank statement.',
+          'Monthly base charges and dated agreed rent changes are shown with documented charge adjustments. Agree and record any partial-month correction. Deposits remain separate. This statement does not decide legal liability.',
           style: TextStyle(color: Palette.muted, fontSize: 11, height: 1.8),
         ),
       ],
@@ -283,7 +308,9 @@ class RentalDetailsView extends StatelessWidget {
               ),
               detail(
                 'Deposit received',
-                t.depositReceivedCents == null
+                store.researchReady
+                    ? money(store.research.depositReceived(t))
+                    : t.depositReceivedCents == null
                     ? 'Not recorded'
                     : money(t.depositReceivedCents!),
               ),
@@ -291,7 +318,13 @@ class RentalDetailsView extends StatelessWidget {
                 'Deposit still due',
                 t.depositCents == null
                     ? 'Not recorded'
-                    : money(t.depositCents! - (t.depositReceivedCents ?? 0)),
+                    : money(
+                        (t.depositCents! -
+                                (store.researchReady
+                                    ? store.research.depositReceived(t)
+                                    : (t.depositReceivedCents ?? 0)))
+                            .clamp(0, 2147483647),
+                      ),
               ),
               detail(
                 'Utility responsibilities',
@@ -301,6 +334,27 @@ class RentalDetailsView extends StatelessWidget {
                 'House rules / notice terms',
                 t.houseRules.isEmpty ? 'Not recorded' : t.houseRules,
               ),
+              if (store.researchReady) ...[
+                for (final field in const {
+                  'landlordAddress': 'Landlord formal-notice address',
+                  'tenantAddress': 'Tenant formal-notice address',
+                  'authority': 'Authority to let (recorded, not verified)',
+                  'dwellingDescription':
+                      'Exact accommodation / room / yard space',
+                  'sharedFacilities': 'Shared facilities and access',
+                  'paymentInstructions': 'Agreed payment instructions',
+                  'noticeTerms': 'Notice and continuation terms',
+                  'escalationTerms': 'Escalation agreement',
+                  'otherCharges': 'Other agreed charges',
+                }.entries)
+                  detail(field.value, t.record[field.key] ?? 'Not recorded'),
+                detail(
+                  'Actual handover',
+                  t.endedOn == null
+                      ? 'Not recorded; planned lease end does not close the account'
+                      : dateLabel(t.endedOn!),
+                ),
+              ],
               if (t.emergencyName.isNotEmpty)
                 detail(
                   'Emergency contact',
@@ -330,6 +384,78 @@ class RentalDetailsView extends StatelessWidget {
             ),
             icon: Icons.fact_check_outlined,
           ),
+        if (store.researchReady) ...[
+          if (owner && t.userId.isEmpty)
+            panel(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  heading('Private account invitation'),
+                  const Text(
+                    'The rental record works without a tenant login. Share this private code only with this tenant; they use it with their room number at registration.',
+                  ),
+                  gap(12),
+                  SelectableText(t.invitation ?? 'Unavailable'),
+                ],
+              ),
+            ),
+          if (owner)
+            action(
+              'Record money received',
+              () => open(context, ResearchPaymentEntry(tenancyId: t.id)),
+            ),
+          action(
+            'Rental documents / supporting files',
+            () => open(context, RentalDocuments(tenancyId: t.id)),
+            icon: Icons.folder_outlined,
+          ),
+          action(
+            'Deposit account',
+            () => open(
+              context,
+              RentalRecordsScreen(tenancyId: t.id, kind: 'deposit'),
+            ),
+          ),
+          action(
+            'Inspections and defects',
+            () => open(
+              context,
+              RentalRecordsScreen(tenancyId: t.id, kind: 'inspection'),
+            ),
+          ),
+          action(
+            'Repairs and account queries',
+            () => open(
+              context,
+              RentalRecordsScreen(tenancyId: t.id, kind: 'repair'),
+            ),
+          ),
+          action(
+            'Charge adjustments',
+            () => open(
+              context,
+              RentalRecordsScreen(tenancyId: t.id, kind: 'adjustment'),
+            ),
+          ),
+          action(
+            'Rental change history',
+            () => open(
+              context,
+              RentalRecordsScreen(tenancyId: t.id, kind: 'audit'),
+            ),
+          ),
+          if (owner) ...[
+            action(
+              'Record agreed rent change',
+              () => recordRentChange(context, t.id),
+            ),
+            if (t.endedOn == null)
+              action(
+                'Record completed handover',
+                () => closeTenancy(context, t.id),
+              ),
+          ],
+        ],
         const Text(
           'This is a rental information record, not a signed legal lease. A read acknowledgement is not a signature. Keep the parties’ signed agreement separately. Rent and due-day changes require a separate agreement; this record preserves the existing rent terms.',
           style: TextStyle(color: Palette.muted, fontSize: 11, height: 1.8),
@@ -350,7 +476,7 @@ class RentalDetailsView extends StatelessWidget {
           () => open(context, PropertyDetailsScreen(propertyId: p.id)),
           icon: Icons.location_on_outlined,
         ),
-        if (owner)
+        if (owner && t.userId.isNotEmpty)
           action(
             'Send rent reminder',
             () => reminder(context, t.id, periodOf(DateTime.now())),
@@ -380,6 +506,15 @@ class _AgreementEditorState extends State<AgreementEditor> {
       'rules',
       'emergencyName',
       'emergencyPhone',
+      'landlordAddress',
+      'tenantAddress',
+      'authority',
+      'dwellingDescription',
+      'sharedFacilities',
+      'paymentInstructions',
+      'noticeTerms',
+      'escalationTerms',
+      'otherCharges',
     ])
       k: TextEditingController(),
   };
@@ -393,6 +528,7 @@ class _AgreementEditorState extends State<AgreementEditor> {
     final t = StoreScope.of(context).tenancy(widget.tenancyId);
     controls['start']!.text =
         t.leaseStart?.toIso8601String().split('T').first ??
+        t.record['tenancyStartedOn'] ??
         '${t.startPeriod}-01';
     controls['end']!.text =
         t.leaseEnd?.toIso8601String().split('T').first ?? '';
@@ -405,6 +541,19 @@ class _AgreementEditorState extends State<AgreementEditor> {
     controls['rules']!.text = t.houseRules;
     controls['emergencyName']!.text = t.emergencyName;
     controls['emergencyPhone']!.text = t.emergencyPhone;
+    for (final key in [
+      'landlordAddress',
+      'tenantAddress',
+      'authority',
+      'dwellingDescription',
+      'sharedFacilities',
+      'paymentInstructions',
+      'noticeTerms',
+      'escalationTerms',
+      'otherCharges',
+    ]) {
+      controls[key]!.text = t.record[key] ?? '';
+    }
     type = t.agreementType == 'Fixed term' ? 'Fixed term' : 'Month-to-month';
     initialized = true;
   }
@@ -445,6 +594,20 @@ class _AgreementEditorState extends State<AgreementEditor> {
         houseRules: controls['rules']!.text,
         emergencyName: controls['emergencyName']!.text,
         emergencyPhone: controls['emergencyPhone']!.text,
+        details: {
+          for (final key in [
+            'landlordAddress',
+            'tenantAddress',
+            'authority',
+            'dwellingDescription',
+            'sharedFacilities',
+            'paymentInstructions',
+            'noticeTerms',
+            'escalationTerms',
+            'otherCharges',
+          ])
+            key: controls[key]!.text,
+        },
       );
       if (mounted && ModalRoute.of(context)?.isCurrent == true)
         Navigator.pop(context);
@@ -482,7 +645,7 @@ class _AgreementEditorState extends State<AgreementEditor> {
     children: [
       heading('Put the important details in writing.'),
       const Text(
-        'Record the actual details agreed by both parties. The proposed first-of-month start date must be checked. Deposits are separate from rent; all rent months are charged in full.',
+        'Record the actual agreement, not assumed terms. Start dates with payment history are protected. A planned end date does not record handover. Deposits and agreed partial-month corrections have separate transaction records.',
         style: TextStyle(color: Palette.muted, height: 1.8),
       ),
       gap(18),
@@ -504,7 +667,31 @@ class _AgreementEditorState extends State<AgreementEditor> {
             if (type == 'Fixed term')
               field('end', 'Occupancy end (YYYY-MM-DD)'),
             field('deposit', 'Agreed deposit (rand; 0 if none)', numeric: true),
-            field('received', 'Deposit already received (rand)', numeric: true),
+            if (!StoreScope.of(context).researchReady)
+              field(
+                'received',
+                'Deposit already received (rand)',
+                numeric: true,
+              ),
+            if (StoreScope.of(context).researchReady) ...[
+              for (final entry in const {
+                'landlordAddress': 'Landlord formal-notice address',
+                'tenantAddress': 'Tenant formal-notice address',
+                'authority': 'Owner / agent / lawful authority to let',
+                'dwellingDescription':
+                    'Exact dwelling, room or yard-space description',
+                'sharedFacilities':
+                    'Shared facilities and access (None if not applicable)',
+                'paymentInstructions':
+                    'Agreed payment instructions (never PINs or passwords)',
+                'noticeTerms': 'Notice, termination and continuation agreement',
+                'escalationTerms':
+                    'Agreed escalation and notice (None if none)',
+                'otherCharges':
+                    'Additional charges and calculation (None if none)',
+              }.entries)
+                field(entry.key, entry.value, multiline: true),
+            ],
             field(
               'utilities',
               'Who pays water, electricity and other utilities?',

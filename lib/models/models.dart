@@ -27,7 +27,7 @@ int parseMoney(String value) {
 
 enum Role { landlord, tenant }
 
-enum ReviewState { pending, confirmed, rejected }
+enum ReviewState { pending, confirmed, rejected, reversed }
 
 class Account {
   final String id, name, phone, email, salt, passwordHash;
@@ -121,6 +121,10 @@ class RentalProperty {
 
 class Tenancy {
   final String id, userId, propertyId, room, startPeriod;
+  final Map<String, dynamic> record;
+  final DateTime? endedOn;
+  final String? invitation;
+  final int ledgerVersion;
   final int rentCents, dueDay;
   final DateTime? leaseStart, leaseEnd, termsUpdatedAt, acknowledgedAt;
   final int? depositCents, depositReceivedCents;
@@ -139,6 +143,10 @@ class Tenancy {
     required this.startPeriod,
     required this.rentCents,
     required this.dueDay,
+    this.record = const {},
+    this.endedOn,
+    this.invitation,
+    this.ledgerVersion = 1,
     this.leaseStart,
     this.leaseEnd,
     this.termsUpdatedAt,
@@ -153,12 +161,16 @@ class Tenancy {
   });
   factory Tenancy.fromJson(Map<String, dynamic> j) => Tenancy(
     id: j['id'],
-    userId: j['userId'],
+    userId: j['userId'] ?? '',
     propertyId: j['propertyId'],
     room: j['room'],
     startPeriod: j['startPeriod'],
     rentCents: j['rentCents'],
     dueDay: j['dueDay'] ?? 1,
+    record: Map<String, dynamic>.from(j['record'] ?? {}),
+    endedOn: j['endedOn'] == null ? null : DateTime.parse(j['endedOn']),
+    invitation: j['invitation'],
+    ledgerVersion: j['ledgerVersion'] ?? 1,
     leaseStart: j['leaseStart'] == null
         ? null
         : DateTime.parse(j['leaseStart']),
@@ -185,6 +197,10 @@ class Tenancy {
     'startPeriod': startPeriod,
     'rentCents': rentCents,
     'dueDay': dueDay,
+    'record': record,
+    'endedOn': endedOn?.toIso8601String(),
+    'invitation': invitation,
+    'ledgerVersion': ledgerVersion,
     'leaseStart': leaseStart?.toIso8601String(),
     'leaseEnd': leaseEnd?.toIso8601String(),
     'termsUpdatedAt': termsUpdatedAt?.toIso8601String(),
@@ -199,9 +215,24 @@ class Tenancy {
   };
 }
 
+class PaymentAllocation {
+  final String period;
+  final int amountCents;
+  const PaymentAllocation(this.period, this.amountCents);
+  factory PaymentAllocation.fromJson(Map<String, dynamic> j) =>
+      PaymentAllocation(j['period'], j['amountCents']);
+  Map<String, dynamic> toJson() => {
+    'period': period,
+    'amountCents': amountCents,
+  };
+}
+
 class RentPayment {
   final String id, tenancyId, period, method, reference, notes;
   final int amountCents;
+  final String payer;
+  final List<PaymentAllocation>? allocations;
+  final Map<String, dynamic>? receiptDetails;
   final String bankReference;
   final DateTime paidOn, submittedAt;
   final ReviewState state;
@@ -217,6 +248,9 @@ class RentPayment {
     required this.amountCents,
     required this.paidOn,
     required this.submittedAt,
+    this.payer = '',
+    this.allocations,
+    this.receiptDetails,
     this.state = ReviewState.pending,
     this.rejectionReason,
     this.bankReference = '',
@@ -229,6 +263,17 @@ class RentPayment {
     method: j['method'],
     reference: j['reference'],
     notes: j['notes'],
+    payer: j['payer'] ?? '',
+    allocations: j['allocations'] == null
+        ? null
+        : (j['allocations'] as List)
+              .map(
+                (a) => PaymentAllocation.fromJson(Map<String, dynamic>.from(a)),
+              )
+              .toList(),
+    receiptDetails: j['receiptDetails'] == null
+        ? null
+        : Map<String, dynamic>.from(j['receiptDetails']),
     bankReference: j['bankReference'] ?? '',
     amountCents: j['amountCents'],
     paidOn: DateTime.parse(j['paidOn']),
@@ -246,6 +291,9 @@ class RentPayment {
     'method': method,
     'reference': reference,
     'notes': notes,
+    'payer': payer,
+    'allocations': allocations?.map((a) => a.toJson()).toList(),
+    'receiptDetails': receiptDetails,
     'bankReference': bankReference,
     'amountCents': amountCents,
     'paidOn': paidOn.toIso8601String(),
@@ -254,6 +302,13 @@ class RentPayment {
     'rejectionReason': rejectionReason,
     'reviewedAt': reviewedAt?.toIso8601String(),
   };
+}
+
+extension PaymentAllocationTotals on RentPayment {
+  List<PaymentAllocation> get splits =>
+      allocations ?? [PaymentAllocation(period, amountCents)];
+  int get creditCents =>
+      amountCents - splits.fold(0, (sum, a) => sum + a.amountCents);
 }
 
 class AppNotice {

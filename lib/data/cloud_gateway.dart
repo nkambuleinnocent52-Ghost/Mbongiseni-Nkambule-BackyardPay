@@ -6,7 +6,12 @@ class CloudGateway {
   CloudGateway(this.client);
   Future<Map<String, dynamic>> snapshot() async {
     if (client.auth.currentSession == null) return emptySnapshot;
-    return Map<String, dynamic>.from(await client.rpc('bp_snapshot'));
+    final data = Map<String, dynamic>.from(await client.rpc('bp_snapshot'));
+    if (data['researchVersion'] != 2)
+      throw StateError(
+        'Run the Research Update SQL in Supabase before using this version. Existing records have not been erased.',
+      );
+    return data;
   }
 
   Future<Map<String, dynamic>> action(
@@ -31,6 +36,9 @@ class CloudGateway {
 
   static Map<String, dynamic> get emptySnapshot => {
     'version': 1,
+    'researchVersion': 2,
+    'rentTerms': [],
+    'caseRecords': [],
     'session': null,
     'accounts': [],
     'properties': [],

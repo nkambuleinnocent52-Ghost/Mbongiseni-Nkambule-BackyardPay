@@ -10,6 +10,7 @@ import 'payments.dart';
 import 'properties.dart';
 import 'profile.dart';
 import 'rental_account.dart';
+import 'research_records.dart';
 
 const _monthNames = [
   'Jan',
@@ -188,9 +189,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 caption: monthLabel(period),
               ),
               Semantics(
-                label: 'Outstanding: ${money(balance)}',
+                label:
+                    '${store.researchReady ? 'Recorded balance' : 'Outstanding'}: ${money(balance)}',
                 child: MetricCard(
-                  label: 'Outstanding',
+                  label: store.researchReady
+                      ? 'Recorded balance'
+                      : 'Outstanding',
                   value: money(balance),
                   icon: Icons.pie_chart_outline,
                   caption: 'Pending submissions are not deducted',
@@ -198,10 +202,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               MetricCard(
-                label: owner ? 'Arrears across months' : 'Total overdue rent',
+                label: owner
+                    ? 'Past-due recorded balance'
+                    : 'Past-due recorded balance',
                 value: money(arrears),
                 icon: Icons.history_rounded,
-                caption: 'Unpaid rent past its due date',
+                caption: 'Confirmed-record balance past due date',
               ),
               MetricCard(
                 label: owner ? 'Occupied rooms' : 'Deposit still due',
@@ -210,8 +216,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     : first?.depositCents == null
                     ? 'Not recorded'
                     : money(
-                        first!.depositCents! -
-                            (first.depositReceivedCents ?? 0),
+                        math.max(
+                          0,
+                          first!.depositCents! -
+                              (store.researchReady
+                                  ? store.research.depositReceived(first)
+                                  : (first.depositReceivedCents ?? 0)),
+                        ),
                       ),
                 icon: owner
                     ? Icons.meeting_room_outlined
@@ -280,6 +291,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ],
         ),
+        if (store.researchReady) ...[
+          gap(16),
+          panel(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Recorded balances are based on confirmed allocations. A pending report is not proof of nonpayment. Review credit and account queries before drawing conclusions.',
+                  style: TextStyle(color: Palette.muted, height: 1.7),
+                ),
+                if (!owner && ts.every((t) => t.endedOn != null))
+                  action(
+                    'Join another rental',
+                    () => open(
+                      context,
+                      EditorPage(
+                        title: 'Join another rental',
+                        help: 'Use the private invitation for your new rental. Your old records remain available.',
+                        fields: const [
+                          FieldSpec(
+                            'invitation',
+                            'Private invitation from landlord',
+                          ),
+                        ],
+                        save: (v) async {
+                          await store.researchAction('join_rental', {
+                            'invitation': v['invitation'],
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                detail(
+                  'Unallocated received credit',
+                  money(ts.fold(0, (sum, t) => sum + store.creditFor(t))),
+                ),
+                detail(
+                  'Open repairs / account queries',
+                  '${store.caseRecords.where((r) => ['repair', 'query'].contains(r['kind']) && store.research.caseStatus(r) != 'resolved').length}',
+                ),
+                if (owner) ...[
+                  detail(
+                    'Incomplete essential lease records',
+                    '${ts.where((t) => ['landlordAddress', 'tenantAddress', 'authority', 'dwellingDescription', 'sharedFacilities', 'paymentInstructions', 'noticeTerms', 'escalationTerms', 'otherCharges'].any((k) => (t.record[k]?.toString().trim() ?? '').isEmpty)).length}',
+                  ),
+                  detail(
+                    'Rentals without an entry inspection',
+                    '${ts.where((t) => !store.research.forTenancy(t.id, 'inspection').any((r) => r['body']['stage'] == 'Entry')).length}',
+                  ),
+                  detail(
+                    'Planned term ended; handover not recorded',
+                    '${ts.where((t) => t.endedOn == null && t.leaseEnd != null && t.leaseEnd!.isBefore(DateTime.now())).length}',
+                  ),
+                ],
+                if (owner)
+                  action(
+                    'Add tenant record',
+                    () => createTenantRecord(context),
+                  ),
+                if (!owner && first != null)
+                  action(
+                    'Repairs and account queries',
+                    () => open(
+                      context,
+                      RentalRecordsScreen(tenancyId: first.id, kind: 'repair'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
         gap(20),
         if (owner) ...[
           LayoutBuilder(
@@ -653,6 +735,8 @@ class _TenantsScreenState extends State<TenantsScreen> {
     return PageShell(
       title: 'My tenants',
       children: [
+        if (store.researchReady)
+          action('Add tenant record', () => createTenantRecord(context)),
         heading('Every tenant. A clear balance.'),
         const Text(
           'View the selected month’s rent position, including tenants who have not submitted a payment.',

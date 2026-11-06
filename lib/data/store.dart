@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'cloud_gateway.dart';
+import 'research_ledger.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,6 +37,22 @@ class AppStore extends ChangeNotifier {
   AppStore(this.storage, {this.cloud});
   final CloudGateway? cloud;
   bool get isCloud => cloud != null;
+  int researchVersion = 0;
+  List<Map<String, dynamic>> rentTerms = [], caseRecords = [];
+  ResearchLedger get research => ResearchLedger(rentTerms, caseRecords);
+  bool get researchReady => researchVersion >= 2;
+  Future<dynamic> researchAction(String op, Map<String, dynamic> args) {
+    if (cloud == null)
+      throw StateError('This action needs the shared database.');
+    return _remote(op, args);
+  }
+
+  int creditFor(Tenancy t) => payments
+      .where((p) => p.tenancyId == t.id && p.state == ReviewState.confirmed)
+      .fold(0, (sum, p) => sum + p.creditCents);
+  int pendingFor(Tenancy t) => payments
+      .where((p) => p.tenancyId == t.id && p.state == ReviewState.pending)
+      .fold(0, (sum, p) => sum + p.amountCents);
   String? syncError;
   DateTime? lastSyncedAt;
   Future<void> refresh() async {
@@ -106,6 +123,9 @@ class AppStore extends ChangeNotifier {
 
   String _snapshot() => jsonEncode({
     'version': 1,
+    'researchVersion': researchVersion,
+    'rentTerms': rentTerms,
+    'caseRecords': caseRecords,
     'session': _session,
     'accounts': _accounts.map((a) => a.toJson()).toList(),
     'properties': _properties.map((a) => a.toJson()).toList(),
@@ -116,6 +136,13 @@ class AppStore extends ChangeNotifier {
   void _restore(String raw) {
     final j = jsonDecode(raw) as Map<String, dynamic>;
     if (j['version'] != 1) throw StateError('Unsupported saved data version.');
+    researchVersion = j['researchVersion'] ?? 0;
+    rentTerms = (j['rentTerms'] as List? ?? [])
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
+    caseRecords = (j['caseRecords'] as List? ?? [])
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
     _accounts = (j['accounts'] as List)
         .map((a) => Account.fromJson(a))
         .toList();
@@ -410,15 +437,23 @@ class AppStore extends ChangeNotifier {
 
   List<Tenancy> get tenancies {
     final a = _user();
-    return List.unmodifiable(
-      _tenancies.where(
-        (t) => a.role == Role.tenant
-            ? t.userId == a.id
-            : _properties.any(
-                (p) => p.id == t.propertyId && p.landlordId == a.id,
-              ),
-      ),
-    );
+    final rows = _tenancies
+        .where(
+          (t) => a.role == Role.tenant
+              ? t.userId == a.id
+              : _properties.any(
+                  (p) => p.id == t.propertyId && p.landlordId == a.id,
+                ),
+        )
+        .toList();
+    if (researchReady)
+      rows.sort((x, y) {
+        final active = (x.endedOn == null ? 0 : 1).compareTo(
+          y.endedOn == null ? 0 : 1,
+        );
+        return active != 0 ? active : y.startPeriod.compareTo(x.startPeriod);
+      });
+    return List.unmodifiable(rows);
   }
 
   Tenancy tenancy(String id) => tenancies.firstWhere(
@@ -431,7 +466,16 @@ class AppStore extends ChangeNotifier {
   );
   Account tenantAccount(Tenancy t) {
     tenancy(t.id);
-    return _accounts.firstWhere((a) => a.id == t.userId);
+    return _accounts.where((a) => a.id == t.userId).firstOrNull ??
+        Account(
+          id: 'offline:${t.id}',
+          name: t.record['tenantName'] ?? 'Tenant record',
+          phone: t.record['tenantPhone'] ?? '',
+          email: t.record['tenantEmail'] ?? '',
+          salt: '',
+          passwordHash: '',
+          role: Role.tenant,
+        );
   }
 
   List<RentPayment> get payments {
@@ -605,6 +649,7 @@ class AppStore extends ChangeNotifier {
   int expected(Tenancy t, String period) {
     tenancy(t.id);
     periodDate(period);
+    if (researchReady) return research.charge(t, period);
     return period.compareTo(t.startPeriod) < 0 ||
             (t.leaseEnd != null && period.compareTo(periodOf(t.leaseEnd!)) > 0)
         ? 0
@@ -612,25 +657,42 @@ class AppStore extends ChangeNotifier {
   }
 
   int collected(Tenancy t, String period) => payments
-      .where(
-        (p) =>
-            p.tenancyId == t.id &&
-            p.period == period &&
-            p.state == ReviewState.confirmed,
-      )
-      .fold(0, (sum, p) => sum + p.amountCents);
+      .where((p) => p.tenancyId == t.id && p.state == ReviewState.confirmed)
+      .fold(
+        0,
+        (sum, p) =>
+            sum +
+            p.splits
+                .where((a) => a.period == period)
+                .fold<int>(0, (n, a) => n + a.amountCents),
+      );
   int outstanding(Tenancy t, String period) =>
       max(0, expected(t, period) - collected(t, period));
   String rentStatus(Tenancy t, String period) {
     final due = expected(t, period), paid = collected(t, period);
     if (due == 0) return 'Not applicable';
+    if (researchReady &&
+        paid < due &&
+        payments.any(
+          (p) =>
+              p.tenancyId == t.id &&
+              p.state == ReviewState.pending &&
+              p.splits.any((a) => a.period == period),
+        ))
+      return 'Awaiting reconciliation';
     if (paid >= due) return 'Paid';
     return paid > 0 ? 'Partially paid' : 'Outstanding';
   }
 
   DateTime dueDate(Tenancy t, String period) {
     final month = periodDate(period);
-    return DateTime(month.year, month.month, t.dueDay);
+    return DateTime(
+      month.year,
+      month.month,
+      researchReady
+          ? (research.rate(t, period)?['dueDay'] as int? ?? t.dueDay)
+          : t.dueDay,
+    );
   }
 
   bool isLate(RentPayment p) => DateTime(
@@ -801,6 +863,16 @@ class AppStore extends ChangeNotifier {
   }
 
   bool isOccupied(Tenancy t) {
+    if (researchReady)
+      return !periodDate(t.startPeriod).isAfter(DateTime.now()) &&
+          (t.endedOn == null ||
+              !t.endedOn!.isBefore(
+                DateTime(
+                  DateTime.now().year,
+                  DateTime.now().month,
+                  DateTime.now().day,
+                ),
+              ));
     final now = DateTime.now(),
         today = DateTime(
           DateTime.now().year,
@@ -827,16 +899,23 @@ class AppStore extends ChangeNotifier {
     var balance = 0;
     for (var m = start; !m.isAfter(end); m = DateTime(m.year, m.month + 1)) {
       final period = periodOf(m), charge = expected(t, period);
-      if (charge == 0) continue;
+      if (charge == 0 && !researchReady) continue;
       final confirmed = collected(t, period);
       final pending = payments
           .where(
             (p) =>
                 p.tenancyId == t.id &&
-                p.period == period &&
+                p.splits.any((a) => a.period == period) &&
                 p.state == ReviewState.pending,
           )
-          .fold(0, (sum, p) => sum + p.amountCents);
+          .fold(
+            0,
+            (sum, p) =>
+                sum +
+                p.splits
+                    .where((a) => a.period == period)
+                    .fold<int>(0, (n, a) => n + a.amountCents),
+          );
       balance += max(0, charge - confirmed);
       rows.add(
         MonthlyAccount(
@@ -865,6 +944,7 @@ class AppStore extends ChangeNotifier {
     required String houseRules,
     String emergencyName = '',
     String emergencyPhone = '',
+    Map<String, String> details = const {},
   }) async {
     if (cloud != null) {
       await _remote('agreement', {
@@ -878,6 +958,7 @@ class AppStore extends ChangeNotifier {
         'houseRules': houseRules.trim(),
         'emergencyName': emergencyName.trim(),
         'emergencyPhone': emergencyPhone.trim(),
+        'details': details,
       });
       return;
     }

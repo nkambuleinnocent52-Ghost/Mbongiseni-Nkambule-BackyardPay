@@ -345,7 +345,7 @@ class _AuthScreenState extends State<AuthScreen> {
             if (registration) ...[
               field('confirm', 'Confirm password', secret: true),
               if (widget.role == Role.tenant) ...[
-                field('code', 'Property code from your landlord'),
+                field('code', 'Property code or private tenant invitation'),
                 field('room', 'Room number', number: true),
               ],
             ],

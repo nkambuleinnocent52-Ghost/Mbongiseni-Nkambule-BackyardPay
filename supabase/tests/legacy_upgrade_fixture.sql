@@ -1,0 +1,6 @@
+-- Synthetic records in disposable PostgreSQL only; never run against hosted data.
+insert into auth.users values('90000000-0000-0000-0000-000000000001','legacy-owner@test.invalid','{"name":"Legacy owner","role":"landlord","phone":"0711111111"}');
+insert into public.bp_properties(id,owner_id,name,address,suburb,city,postal_code,code,rooms,rent,due_day) values('90000000-0000-0000-0000-000000000003','90000000-0000-0000-0000-000000000001','Legacy rooms','1 Test Road','Area','East London','5201','BP-LEGACY',2,150000,1);
+insert into auth.users values('90000000-0000-0000-0000-000000000002','legacy-tenant@test.invalid','{"name":"Legacy tenant","role":"tenant","phone":"0722222222","code":"BP-LEGACY","room":"1"}');
+update public.bp_tenancies set terms='{"depositReceivedCents":75000,"depositCents":150000}' where property_id='90000000-0000-0000-0000-000000000003';
+insert into public.bp_payments(id,tenancy_id,period,amount,method,reference,bank_reference,notes,paid_on,state,reviewed_at) select '90000000-0000-0000-0000-000000000004',id,date_trunc('month',current_date),50000,'Cash','LEGACY-CASH','','Imported old receipt',current_date,'confirmed',now() from public.bp_tenancies where property_id='90000000-0000-0000-0000-000000000003';

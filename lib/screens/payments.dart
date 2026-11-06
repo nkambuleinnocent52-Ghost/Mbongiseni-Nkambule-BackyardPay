@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../services/receipts.dart';
 import 'common.dart';
 import 'dashboard.dart';
+import 'payment_entry.dart';
 import '../ui/design.dart';
 
 class PaymentFormScreen extends StatefulWidget {
@@ -79,6 +80,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context), t = store.tenancy(widget.tenancyId);
+    if (store.researchReady) return ResearchPaymentEntry(tenancyId: t.id);
     final start = periodDate(t.startPeriod), now = DateTime.now();
     final months = <String>[];
     for (
@@ -230,7 +232,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final ps = store.payments
         .where(
           (p) =>
-              p.period == period &&
+              (p.period == period || p.splits.any((a) => a.period == period)) &&
               (widget.tenancyId == null || p.tenancyId == widget.tenancyId) &&
               (filter == 'All' || p.state.name == filter.toLowerCase()),
         )
@@ -272,7 +274,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             ),
           ),
         const Text(
-          'Missing payments appear as outstanding balances on the dashboard, not as fictional payment records.',
+          'Lists payments by received/submitted month or allocated rental month. Confirmed allocations and pending reports are separate; a missing app entry is not proof of nonpayment.',
         ),
       ],
     );
@@ -320,6 +322,16 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
       if (result == null) return;
       reason = result;
     } else {
+      if (store.researchReady) {
+        open(
+          context,
+          ResearchPaymentEntry(
+            tenancyId: store.payment(widget.paymentId).tenancyId,
+            paymentId: widget.paymentId,
+          ),
+        );
+        return;
+      }
       final yes = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
@@ -393,7 +405,13 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         if (p.state == ReviewState.pending)
           panel(
             const Text(
-              'Payment submitted. Waiting for landlord confirmation. This acknowledgement is not a confirmed receipt.',
+              'Payment reported; awaiting landlord reconciliation. This is not a confirmed receipt, and pending status is not proof that no money reached the landlord.',
+            ),
+          ),
+        if (p.state == ReviewState.reversed)
+          panel(
+            Text(
+              'Received payment reversed: ${p.rejectionReason}. Original details are retained. Its allocations and credit no longer reduce the account balance.',
             ),
           ),
         if (p.state == ReviewState.rejected)
@@ -405,7 +423,19 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
               detail('Tenant', tenant.name),
               detail('Property', property.name),
               detail('Room', t.room),
-              detail('Rent month', p.period),
+              if (!store.researchReady) detail('Rent month', p.period),
+              if (p.payer.isNotEmpty) detail('Actual payer', p.payer),
+              if (store.researchReady) ...[
+                heading('Rental allocations'),
+                for (final a in p.splits)
+                  detail(a.period, money(a.amountCents)),
+                detail(
+                  p.state == ReviewState.confirmed
+                      ? 'Unallocated credit'
+                      : 'Proposed unallocated amount',
+                  money(p.creditCents),
+                ),
+              ],
               detail('Amount', money(p.amountCents)),
               detail('Method', p.method),
               detail(
@@ -420,7 +450,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
                 if (p.method == 'EFT' || p.method == 'PayShap')
                   panel(
                     const Text(
-                      'This rent acknowledgement confirms the landlord allocated the received payment to your rental month. Keep your original bank proof; this is not a bank-issued receipt.',
+                      'The landlord’s receipt acknowledges the same money as your bank record and identifies its rental allocations. Keep both. This is not bank verification.',
                       style: TextStyle(color: Palette.goldLight, height: 1.8),
                     ),
                   ),
@@ -428,8 +458,13 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
                   'Confirmed on',
                   p.reviewedAt!.toLocal().toString().split('.').first,
                 ),
-                detail('Paid after due date', store.isLate(p) ? 'Yes' : 'No'),
-                detail('Month balance', money(store.outstanding(t, p.period))),
+                if (!store.researchReady)
+                  detail('Paid after due date', store.isLate(p) ? 'Yes' : 'No'),
+                if (!store.researchReady)
+                  detail(
+                    'Month balance',
+                    money(store.outstanding(t, p.period)),
+                  ),
               ],
             ],
           ),
@@ -447,6 +482,20 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
           ),
         ],
         if (confirmed) ...[
+          if (store.researchReady &&
+              store.currentUser!.role == Role.landlord &&
+              p.creditCents > 0)
+            action(
+              'Allocate unallocated credit',
+              () => open(
+                context,
+                ResearchPaymentEntry(
+                  tenancyId: t.id,
+                  paymentId: p.id,
+                  credit: true,
+                ),
+              ),
+            ),
           action(
             'Print / save PDF',
             busy ? null : () => pdf(false),
@@ -459,6 +508,38 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
           ),
         ],
         if (busy) const LinearProgressIndicator(),
+        if (p.state == ReviewState.reversed)
+          action(
+            'Download original receipt with reversal note',
+            () => pdf(true),
+            icon: Icons.download_outlined,
+          ),
+        if (store.researchReady &&
+            confirmed &&
+            store.currentUser!.role == Role.landlord)
+          action(
+            'Record return / reversal',
+            () => open(
+              context,
+              EditorPage(
+                title: 'Record payment reversal',
+                help: 'Record only money actually returned/reversed or an evidenced erroneous received entry. This does not transfer money. The original record stays visible and its allocations stop reducing the balance. For a partial return, reconcile the full reversal and record the actual retained amount separately with linked references.',
+                fields: const [
+                  FieldSpec(
+                    'reason',
+                    'Actual reversal / correction and evidence reference',
+                    multiline: true,
+                  ),
+                ],
+                save: (v) async {
+                  await store.researchAction('reverse_payment', {
+                    'id': p.id,
+                    'reason': v['reason'],
+                  });
+                },
+              ),
+            ),
+          ),
         action(
           'Back to dashboard',
           () => home(context),

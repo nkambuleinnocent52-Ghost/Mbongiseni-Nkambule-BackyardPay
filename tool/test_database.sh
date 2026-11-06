@@ -13,3 +13,14 @@ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/mi
 # Verify the migration is safe to re-run without deleting records.
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202610240001_backyardpay.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/access_and_payments.sql
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/legacy_upgrade_fixture.sql
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611060001_research_accounts.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611060001_research_accounts.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611060002_private_documents.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611060002_private_documents.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/legacy_upgrade_assert.sql
+if [ -f supabase/tests/research_accounts.sql ]; then
+ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/research_accounts.sql
+fi
