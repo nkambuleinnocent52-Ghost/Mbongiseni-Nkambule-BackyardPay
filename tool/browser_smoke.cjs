@@ -26,11 +26,12 @@ let recoveryEmail;
   await context.route('https://zmxxgetndtcyuwzwwjbd.supabase.co/**',async route=>{
    const req=route.request(),path=new URL(req.url()).pathname,body=req.postDataJSON()||{};
    const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+   if(path.endsWith('/bp_tenant_signup_mode'))return reply('invitation_only');
    if(path.endsWith('/signup')){
     const u={id:crypto.randomUUID(),email:body.email,password:body.password,...body.data,salt:'',passwordHash:''};users.push(u);
     if(u.role==='tenant'){
-     const p=properties.find(p=>p.code===u.code);assert(p);assert(!tenancies.some(t=>t.propertyId===p.id&&t.room===u.room));
-     tenancies.push({id:crypto.randomUUID(),userId:u.id,propertyId:p.id,room:u.room,startPeriod:now().slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:now().slice(0,10)}});
+     const t=tenancies.find(t=>t.invitation===u.code);assert(t);assert.equal(t.userId,'');assert(!('room' in body.data));
+     t.userId=u.id;t.invitation='USED-'+crypto.randomUUID();
     }
     return reply(session(u));
    }
@@ -48,6 +49,9 @@ let recoveryEmail;
     const a=body.args;let result=null;
     if(body.operation==='property'){
      result=crypto.randomUUID();properties.push({...a,id:result,landlordId:u.id,code:'BP-CONTRACT-TEST',latitude:null,longitude:null});
+    } else if(body.operation==='tenancy'){
+     const p=properties.find(p=>p.id===a.propertyId);assert(p);result=crypto.randomUUID();
+     tenancies.push({id:result,userId:'',propertyId:p.id,room:String(a.room),startPeriod:a.start.slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,invitation:'JOIN-'+crypto.randomUUID().replaceAll('-','').toUpperCase(),record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:a.start}});
     } else if(body.operation==='payment'){
      result=crypto.randomUUID();payments.push({...a,id:result,state:'pending',submittedAt:now()});
     } else if(body.operation==='review'){
@@ -76,13 +80,18 @@ let recoveryEmail;
  const register=async(page,role,email)=>{
   await button(page,'GET STARTED');await button(page,role);await button(page,'Create an account');
   await fill(page,'Full name',role==='LANDLORD'?'Owner Test':'Tenant Test');await fill(page,'Phone number','0711234567');await fill(page,'Email',email);await fill(page,'Password','TestPassword123!');await fill(page,'Confirm password','TestPassword123!');
-  if(role==='TENANT'){await fill(page,'Property code or private tenant invitation','BP-CONTRACT-TEST');await fill(page,'Room number','1');}
+  if(role==='TENANT'){assert.equal(await page.getByRole('textbox',{name:'Room number',exact:true}).count(),0);await fill(page,'Private invitation from your landlord',tenancies[0].invitation);}
   await button(page,'Create account');await page.getByText(role==='LANDLORD'?'Landlord dashboard':'Tenant dashboard',{exact:true}).waitFor();
  };
  const owner=await make();assert(!((await owner.locator('body').innerText()).toLowerCase().includes('demo')));
  await register(owner,'LANDLORD','owner@contract.test');await button(owner,'My properties');await button(owner,'Add property');
  for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2'],['Security deposit per new tenancy (rand; 0 if none)','2000']])await fill(owner,name,value);
  await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();await button(owner,'Back');
+ await button(owner,'Add tenant record');await button(owner,'Enter tenant details');await fill(owner,'Tenant full name','Tenant Test');
+ const room=owner.getByRole('button',{name:'Available room',exact:true});
+ await room.evaluate(e=>e.click());await owner.waitForTimeout(350);
+ await owner.getByRole('menuitem',{name:'Room 1',exact:true}).evaluate(e=>e.click());
+ await button(owner,'Save');await button(owner,'Back');
  const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');
  const today=new Date(),monthDays=new Date(today.getUTCFullYear(),today.getUTCMonth()+1,0).getUTCDate();const firstCents=Math.round(150000*(monthDays-today.getUTCDate()+1)/monthDays);const paymentLabel=`Tenant Test • R ${(firstCents/100).toFixed(2)}`;
  await button(tenant,'Record payment');await button(tenant,'Submit payment');await tenant.getByText(/^PENDING$/).first().waitFor();

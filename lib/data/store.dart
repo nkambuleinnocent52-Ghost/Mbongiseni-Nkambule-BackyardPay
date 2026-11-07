@@ -234,6 +234,30 @@ class AppStore extends ChangeNotifier {
     if (cloud != null) {
       _identity(name, email, phone);
       _passwordRules(password);
+      final invitation = code.trim().toUpperCase();
+      if (role == Role.tenant) {
+        if (room.trim().isNotEmpty)
+          throw ArgumentError(
+            'Your landlord assigns the room. Register using only the private invitation.',
+          );
+        if (!RegExp(r'^JOIN-[A-F0-9]{32}$').hasMatch(invitation))
+          throw ArgumentError(
+            'Ask your landlord for the private JOIN- invitation from your assigned rental. A property code cannot be used to register.',
+          );
+        try {
+          if (await cloud!.client.rpc('bp_tenant_signup_mode') !=
+              'invitation_only')
+            throw StateError(
+              'The project owner must run BackyardPay-Invitation-Update.sql before tenant registration.',
+            );
+        } on PostgrestException catch (e) {
+          if (['PGRST202', '42883'].contains(e.code))
+            throw StateError(
+              'The project owner must run BackyardPay-Invitation-Update.sql before tenant registration.',
+            );
+          rethrow;
+        }
+      }
       final response = await cloud!.client.auth.signUp(
         email: email.trim().toLowerCase(),
         password: password,
@@ -241,8 +265,7 @@ class AppStore extends ChangeNotifier {
           'name': name.trim(),
           'phone': phone.trim(),
           'role': role.name,
-          'code': code.trim().toUpperCase(),
-          'room': room.trim(),
+          if (role == Role.tenant) 'code': invitation,
         },
         emailRedirectTo: 'https://quiet-pastelito-19fa50.netlify.app/',
       );

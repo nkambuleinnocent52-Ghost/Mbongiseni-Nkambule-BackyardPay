@@ -222,7 +222,7 @@ class UserTypeScreen extends StatelessWidget {
         ),
       gap(),
       const Text(
-        'New here? Create a landlord account and property first, then register your tenant with the property code.',
+        'The landlord assigns the room first and shares a private invitation. Tenants use that invitation once to create their own login.',
       ),
     ],
   );
@@ -238,15 +238,7 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final form = GlobalKey<FormState>();
   final controls = {
-    for (final key in [
-      'name',
-      'email',
-      'phone',
-      'password',
-      'confirm',
-      'code',
-      'room',
-    ])
+    for (final key in ['name', 'email', 'phone', 'password', 'confirm', 'code'])
       key: TextEditingController(),
   };
   bool registration = false, busy = false;
@@ -275,7 +267,6 @@ class _AuthScreenState extends State<AuthScreen> {
           password: controls['password']!.text,
           role: widget.role,
           code: controls['code']!.text,
-          room: controls['room']!.text,
         );
       } else {
         await store.login(
@@ -345,8 +336,10 @@ class _AuthScreenState extends State<AuthScreen> {
             if (registration) ...[
               field('confirm', 'Confirm password', secret: true),
               if (widget.role == Role.tenant) ...[
-                field('code', 'Property code or private tenant invitation'),
-                field('room', 'Room number', number: true),
+                const Text(
+                  'Your landlord has already assigned your room, move-in date, rent and deposit. Enter the private JOIN- invitation they share with you. You do not choose a room here.',
+                ),
+                field('code', 'Private invitation from your landlord'),
               ],
             ],
             if (error != null)

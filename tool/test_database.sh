@@ -38,3 +38,7 @@ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/mi
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611070001_first_month_proration.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611070002_deposits_and_reports.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposits_and_reports.sql
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611070003_invitation_only_signup.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611070003_invitation_only_signup.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/invitation_only_signup.sql

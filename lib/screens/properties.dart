@@ -2,7 +2,6 @@ import 'room_availability.dart';
 import '../data/research_ledger.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -30,7 +29,7 @@ class PropertiesScreen extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(p.name),
-              subtitle: Text('${p.fullAddress}\nCode: ${p.code}'),
+              subtitle: Text(p.fullAddress),
               isThreeLine: true,
               trailing: const Icon(Icons.chevron_right),
               onTap: () =>
@@ -236,15 +235,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     : 'Full month by agreement',
               ),
               detail('Due day', '${p.dueDay}'),
-              SelectableText('Property code: ${p.code}'),
               if (landlord)
-                TextButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: p.code));
-                    if (context.mounted) tell(context, 'Property code copied.');
-                  },
-                  icon: const Icon(Icons.copy),
-                  label: const Text('Copy property code'),
+                const Text(
+                  'Assign the tenant an available room first. Share the private invitation from that tenant’s rental record; property codes cannot be used for account registration.',
                 ),
             ],
           ),

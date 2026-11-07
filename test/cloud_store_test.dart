@@ -82,6 +82,13 @@ void main() {
             headers: {'content-type': 'application/json'},
           );
         }
+        if (path.endsWith('/bp_tenant_signup_mode'))
+          return http.Response(
+            jsonEncode('invitation_only'),
+            200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          );
         if (path.endsWith('/bp_snapshot')) {
           if (failSnapshot)
             return http.Response(
@@ -244,6 +251,58 @@ void main() {
       await store.logout();
       expect(store.currentUser, isNull);
       expect(storage.data, 'old browser records must not be uploaded');
+    },
+  );
+  test(
+    'cloud tenant signup sends a private invitation and no room selection',
+    () async {
+      serverRole = 'tenant';
+      await store.register(
+        name: 'Tenant',
+        email: 'tenant@example.test',
+        phone: '0711234567',
+        password: 'UniquePassword123!',
+        role: Role.tenant,
+        code: 'JOIN-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      );
+      final data = jsonDecode(
+        requests.singleWhere((r) => r.url.path.endsWith('/signup')).body,
+      )['data'];
+      expect(data['code'], 'JOIN-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+      expect(data.containsKey('room'), false);
+      expect(
+        requests.any((r) => r.url.path.endsWith('/bp_tenant_signup_mode')),
+        true,
+      );
+    },
+  );
+  test(
+    'cloud property codes and client room choices are rejected before signup',
+    () async {
+      await expectLater(
+        store.register(
+          name: 'Tenant',
+          email: 'tenant@example.test',
+          phone: '0711234567',
+          password: 'UniquePassword123!',
+          role: Role.tenant,
+          code: 'BP-PUBLIC',
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        store.register(
+          name: 'Tenant',
+          email: 'tenant@example.test',
+          phone: '0711234567',
+          password: 'UniquePassword123!',
+          role: Role.tenant,
+          code: 'JOIN-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          room: '10',
+        ),
+        throwsArgumentError,
+      );
+      expect(requests, isEmpty);
     },
   );
 }

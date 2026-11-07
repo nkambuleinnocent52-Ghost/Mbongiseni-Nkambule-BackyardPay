@@ -29,7 +29,7 @@ The old sample app remains the deployed version until this upload is complete. T
 
 1. Choose Landlord → Create an account. Use an email address you can open, a strong password, your name and contact number.
 2. Confirm your email, then log in as Landlord.
-3. Create a property: address, room count, default rent and due day. Copy its property code.
+3. Create a property: address, room count, default rent and due day. Assign an available room to the tenant using Add tenant record, then share that rental’s private JOIN- invitation. Property codes cannot register tenant accounts.
 4. The tenant creates their own account using that code and an available room number, confirms their email and signs in as Tenant. Landlords should not collect tenants' passwords.
 5. Complete Rental details as Landlord: dates, deposits, utilities, rules and contacts. The tenant can acknowledge reading those details.
 6. Tenant records a payment. The landlord checks actual receipt of the money before confirming. Both accounts then show the updated balance and the confirmed PDF.
@@ -44,3 +44,5 @@ The application records payments; it does not transfer money or automatically ve
 - `node tool/browser_smoke.cjs`: browser checks against a controlled local test backend; see the script. Never run test seeding against the real database without explicit authorization.
 
 Local checks do not prove email delivery or that the migration has been applied to the hosted project. Verify a real owner-controlled landlord/tenant journey after SQL, email and deployment setup. Do not claim production readiness solely from a build passing.
+
+For existing installations, apply `downloads/BackyardPay-Invitation-Update.sql` before deploying version 1.0.5. A tenant uses the private invitation once; subsequent logins use email and password.

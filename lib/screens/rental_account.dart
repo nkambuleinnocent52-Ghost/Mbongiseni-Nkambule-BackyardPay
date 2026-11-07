@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 import 'rental_costs.dart';
 import '../data/research_ledger.dart';
 import 'documents.dart';
@@ -407,10 +409,22 @@ class RentalDetailsView extends StatelessWidget {
                 children: [
                   heading('Private account invitation'),
                   const Text(
-                    'The rental record works without a tenant login. Share this private code only with this tenant; they use it with their room number at registration.',
+                    'The room is already assigned. Share this private invitation only with this tenant. They use it once to create their own login; no room number is entered at registration.',
                   ),
                   gap(12),
                   SelectableText(t.invitation ?? 'Unavailable'),
+                  if (t.invitation?.startsWith('JOIN-') == true)
+                    action(
+                      'Copy tenant invitation',
+                      () => perform(
+                        context,
+                        () => Clipboard.setData(
+                          ClipboardData(text: t.invitation!),
+                        ),
+                        success: 'Private tenant invitation copied.',
+                      ),
+                      icon: Icons.copy,
+                    ),
                 ],
               ),
             ),

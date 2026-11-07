@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Latest release: 1.0.4, build 5.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.4.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
+> **Latest release: 1.0.5, build 6.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.5.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -16,6 +16,8 @@ The black/gold design is retained. See the [research implementation audit](docs/
 - Separate stakeholder dashboards show relevant records, credit, attention items and actions. Location, optional active-browser alerts and in-app notifications remain.
 
 ## Activate the update
+
+**For 1.0.5:** Run [Invitation update SQL](downloads/BackyardPay-Invitation-Update.sql) in Supabase before uploading the latest web ZIP. This preserves existing accounts and rentals and makes room assignment landlord-only. [Instructions](docs/releases/Netlify-1.0.5.md).
 
 **For 1.0.4:** room availability needs only the latest web ZIP on an already activated 1.0.3 backend; no additional SQL. [Room inventory and onboarding rules](docs/releases/Netlify-1.0.4.md).
 
@@ -62,7 +64,7 @@ For normal machines, `flutter analyze` and `dart format lib test tool` are stand
 
 For the reproducible release use `FLUTTER_BIN=/path/to/flutter tool/build_netlify.sh` (Flutter 3.47.5, Python 3), then the browser checks described in the release notes.
 
-See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email sender and deployment steps. Create a landlord account and a property, then create the tenant record and share its private invitation. Tenants can also register into a genuinely vacant room using the property code. With Confirm email disabled for development, account creation does not wait for confirmation mail. Landlords can record received money directly; tenant-reported money awaits landlord reconciliation. No sample accounts or seed records are created by the application.
+See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email sender and deployment steps. Create a landlord account and a property, then create the tenant record and share its private invitation. Tenant registration requires that private invitation; tenants cannot select a room or register using a property code. With Confirm email disabled for development, account creation does not wait for confirmation mail. Landlords can record received money directly; tenant-reported money awaits landlord reconciliation. No sample accounts or seed records are created by the application.
 
 ## Architecture and tests
 

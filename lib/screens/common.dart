@@ -256,7 +256,7 @@ void home(BuildContext context) =>
 String errorText(Object error) {
   if (error is AuthException) {
     if (error.message.toLowerCase().contains('database error saving'))
-      return 'Account could not be created. Check the property code and room availability with your landlord, then try again.';
+      return 'Account could not be created. Ask your landlord to check that your private invitation is correct, unused and linked to your assigned rental.';
     return error.message;
   }
   if (error is PostgrestException) {
