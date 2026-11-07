@@ -265,7 +265,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
               gap(16),
               heading('Allocate to rental charges'),
               const Text(
-                'One payment may cover several months. Any remainder stays as unallocated credit. Leave all allocations at zero if the purpose needs clarification. Deposits are recorded in the separate Deposit account. If one bank transfer covers both, enter only its rent portion here and its deposit portion there, using the same actual bank transaction reference. Do not record the full transfer twice.',
+                'One payment may cover several months. Any remainder stays as unallocated credit. Leave all allocations at zero if the purpose needs clarification. Deposits are recorded separately in the Security deposit section of rental details. If one bank transfer covers both, enter only its rent portion here and its deposit portion there, using the same actual bank transaction reference. Do not record the full transfer twice.',
               ),
               gap(12),
               for (var i = 0; i < periods.length; i++)

@@ -1,3 +1,4 @@
+import 'simple_rentals.dart';
 import 'rental_costs.dart';
 
 import 'dart:math' as math;
@@ -351,10 +352,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     '${ts.where((t) => ['landlordAddress', 'tenantAddress', 'authority', 'dwellingDescription', 'sharedFacilities', 'paymentInstructions', 'noticeTerms', 'escalationTerms', 'otherCharges'].any((k) => (t.record[k]?.toString().trim() ?? '').isEmpty)).length}',
                   ),
                   detail(
-                    'Rentals without an entry inspection',
-                    '${ts.where((t) => !store.research.forTenancy(t.id, 'inspection').any((r) => r['body']['stage'] == 'Entry')).length}',
-                  ),
-                  detail(
                     'Planned term ended; handover not recorded',
                     '${ts.where((t) => t.endedOn == null && t.leaseEnd != null && t.leaseEnd!.isBefore(DateTime.now())).length}',
                   ),
@@ -362,7 +359,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (owner)
                   action(
                     'Tenant reports',
-                    () => open(context, const ReportsOverview()),
+                    () => open(context, const SimpleReportsScreen()),
                     icon: Icons.report_outlined,
                   ),
                 if (owner)
@@ -373,10 +370,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 if (!owner && first != null)
                   action(
                     'Report a problem / account query',
-                    () => open(
-                      context,
-                      RentalRecordsScreen(tenancyId: first.id, kind: 'repair'),
-                    ),
+                    () =>
+                        open(context, SimpleReportsScreen(tenancyId: first.id)),
                   ),
               ],
             ),
@@ -469,7 +464,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   heading('Start with your property'),
                   const Text(
-                    'Add the address and rooms, then share the property code with your tenant.',
+                    'Add the address and rooms, assign a tenant, then share their private invitation.',
                   ),
                   action('Add property', () => editProperty(context)),
                 ],
@@ -825,7 +820,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
           ),
         gap(16),
         const Text(
-          'Tenants join using your property code and an available room number.',
+          'Assign an available room first. Share the rental’s private invitation so the tenant can create their login.',
           style: TextStyle(color: Palette.muted, fontSize: 12),
         ),
       ],

@@ -77,6 +77,9 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                       try {
                         final date = checkedDate(v['start']!);
                         final property = store.property(propertyId!);
+                        final roomRent = property.rentForRoom(
+                          int.tryParse(v['room'] ?? '') ?? 0,
+                        );
                         return panel(
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,11 +99,8 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                                 'First rent charge',
                                 money(
                                   property.prorateFirstMonth
-                                      ? proratedFirstCharge(
-                                          property.rentCents,
-                                          date,
-                                        )
-                                      : property.rentCents,
+                                      ? proratedFirstCharge(roomRent, date)
+                                      : roomRent,
                                 ),
                               ),
                               if (property.securityDepositCents != null)
@@ -110,15 +110,15 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                                     property.securityDepositCents! +
                                         (property.prorateFirstMonth
                                             ? proratedFirstCharge(
-                                                property.rentCents,
+                                                roomRent,
                                                 date,
                                               )
-                                            : property.rentCents),
+                                            : roomRent),
                                   ),
                                 ),
                               Text(
                                 firstChargeExplanation(
-                                  property.rentCents,
+                                  roomRent,
                                   date,
                                   property.prorateFirstMonth,
                                 ),

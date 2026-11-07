@@ -70,6 +70,8 @@ class RentalProperty {
     city,
     postalCode,
   ].where((s) => s.trim().isNotEmpty).join(', ');
+  final Map<String, int> roomRents;
+  int rentForRoom(int room) => roomRents['$room'] ?? rentCents;
   final int rooms, rentCents, dueDay;
   final bool prorateFirstMonth;
   final int? securityDepositCents;
@@ -85,6 +87,7 @@ class RentalProperty {
     required this.dueDay,
     this.latitude,
     this.longitude,
+    this.roomRents = const {},
     this.prorateFirstMonth = true,
     this.securityDepositCents,
     this.suburb = '',
@@ -102,6 +105,7 @@ class RentalProperty {
     code: j['code'],
     prorateFirstMonth: j['prorateFirstMonth'] ?? false,
     securityDepositCents: j['securityDepositCents'],
+    roomRents: Map<String, int>.from(j['roomRents'] ?? {}),
     rooms: j['rooms'],
     rentCents: j['rentCents'],
     dueDay: j['dueDay'],
@@ -119,6 +123,7 @@ class RentalProperty {
     'code': code,
     'prorateFirstMonth': prorateFirstMonth,
     'securityDepositCents': securityDepositCents,
+    'roomRents': roomRents,
     'rooms': rooms,
     'rentCents': rentCents,
     'dueDay': dueDay,

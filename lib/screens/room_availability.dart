@@ -45,7 +45,7 @@ class RoomAvailability extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    'Room $room: ${available.contains(room) ? 'Available' : 'Unavailable'}',
+                    'Room $room: ${available.contains(room) ? 'Available' : 'Unavailable'}\n${money(p.rentForRoom(room))} / month',
                     style: TextStyle(
                       color: available.contains(room)
                           ? Palette.green
@@ -63,7 +63,7 @@ class RoomAvailability extends StatelessWidget {
                 : 'Choose one of the available rooms when onboarding.',
           ),
           const Text(
-            'A planned lease end does not free a room. With day-based records, a room becomes available the day after actual handover. Availability can change; it is checked again when you save.',
+            'Rooms become available the day after they are returned. Availability is checked again when you save.',
             style: TextStyle(color: Palette.muted, fontSize: 12),
           ),
         ],

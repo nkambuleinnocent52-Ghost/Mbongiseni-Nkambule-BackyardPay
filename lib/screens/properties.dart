@@ -1,3 +1,5 @@
+import 'room_rents.dart';
+import 'simple_rentals.dart';
 import 'room_availability.dart';
 import '../data/research_ledger.dart';
 
@@ -47,7 +49,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
     context,
     EditorPage(
       title: property == null ? 'Add property' : 'Edit property',
-      help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. Specify the agreed refundable security deposit (0 if none). It is separate from rent and due before occupation; a setting does not record money received. No payment processing is performed.',
+      help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. Specify the agreed refundable security deposit (0 if none). It is separate from rent; a setting does not record money received. No payment processing is performed.',
       preview: (context, v) {
         try {
           final cents = parseMoney(v['rent']!);
@@ -83,7 +85,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
         ),
         FieldSpec(
           'rent',
-          'Monthly rent (rand)',
+          'Default monthly rent (rand)',
           initial: ((property?.rentCents ?? 150000) / 100).toStringAsFixed(2),
           numeric: true,
         ),
@@ -203,6 +205,13 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       children: [
         heading(p.name),
         if (landlord) RoomAvailability(propertyId: p.id),
+        if (landlord) RoomRentEditor(propertyId: p.id),
+        if (landlord)
+          RentalSection(
+            title: 'Message tenants',
+            subtitle: 'One update for this property',
+            children: [PropertyMessage(propertyId: p.id)],
+          ),
         if (landlord && p.city.isEmpty)
           panel(
             const Text(
@@ -221,7 +230,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   'Available for a new tenancy',
                   '${store.availableRoomNumbers(p.id).length}',
                 ),
-              detail('Rent for new tenants', money(p.rentCents)),
+              detail('Default monthly rent', money(p.rentCents)),
               detail(
                 'Security deposit for new tenants',
                 p.securityDepositCents == null
