@@ -1,0 +1,35 @@
+// Tests the release HTML, CSP, useful failure state and previous Flutter cache retirement.
+const {chromium} = require('playwright');
+const assert = require('node:assert/strict');
+const base = process.env.APP_URL || 'http://127.0.0.1:8080/';
+let browser;
+(async () => {
+  browser = await chromium.launch({executablePath:process.env.CHROME_BIN || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+  const success = await browser.newContext({viewport:{width:390,height:844}});
+  const page = await success.newPage();
+  const violations = [];
+  await page.addInitScript(() => document.addEventListener('securitypolicyviolation', e => console.error('CSP violation: '+e.violatedDirective+' '+e.blockedURI)));
+  page.on('console', message => { if(message.type()==='error') violations.push(message.text()); });
+  page.on('pageerror', error => violations.push(error.message));
+  await page.goto(base);
+  await page.locator('flt-semantics-placeholder').waitFor();
+  await page.locator('flt-semantics-placeholder').evaluate(e=>e.click());
+  await page.getByRole('button',{name:'GET STARTED',exact:true}).waitFor();
+  await page.waitForFunction(()=>!document.getElementById('startup'));
+  assert.deepEqual(violations,[], 'No startup errors or CSP violations');
+  await page.evaluate(async()=>{const cache=await caches.open('flutter-app-cache');await cache.put('/old-app',new Response('old'));localStorage.setItem('bp-release-preserve-test','kept');});
+  await page.reload();
+  await page.locator('flt-semantics-placeholder').waitFor();
+  assert.equal(await page.evaluate(async()=>(await caches.keys()).includes('flutter-app-cache')),false);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('bp-release-preserve-test')),'kept');
+  await success.close();
+  const failure = await browser.newContext();
+  await failure.route('**/flutter_bootstrap.js', route=>route.abort());
+  const failedPage=await failure.newPage();
+  await failedPage.goto(base);
+  await failedPage.getByText('BackyardPay could not start. Check your connection and reload the application.',{exact:true}).waitFor();
+  assert.equal(await failedPage.getByRole('button',{name:'Reload application',exact:true}).isVisible(),true);
+  await failure.close();
+  console.log('Web startup checks passed: CSP, phone launch, cache retirement with local storage preserved, and readable script failure/retry.');
+  await browser.close();
+})().catch(async error=>{console.error(error);if(browser)await browser.close();process.exit(1);});

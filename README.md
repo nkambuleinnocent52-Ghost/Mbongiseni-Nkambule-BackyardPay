@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Release hold — 7 November 2026:** Windows Defender flagged the research web ZIP. Keep that download quarantined and pause deployment pending file-specific review. [Investigation and independent scan results](docs/security/Release-detection-2026-11-07.md).
+> **Latest release: 1.0.1, build 2.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.1.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -18,7 +18,7 @@ The black/gold design is retained. See the [research implementation audit](docs/
 ## Activate the update
 
 1. Export/back up the existing Supabase database. Run [BackyardPay-Research-Update.sql](downloads/BackyardPay-Research-Update.sql) in that project's SQL Editor. It is additive and retains existing accounts/payments. Do not rerun the original migration afterwards, which would restore old RPC definitions.
-2. Upload the contents of [BackyardPay-Research-web.zip](downloads/BackyardPay-Research-web.zip) to Netlify. The ZIP has `index.html` at its root.
+2. Use the rebuilt [BackyardPay-Netlify-web.zip](downloads/BackyardPay-Netlify-web.zip) for Netlify after its normal browser/Windows checks. The ZIP has `index.html` at its root.
 3. Use existing email/password accounts. Keep **Confirm email off** in Supabase's email provider during development if signup must not send confirmation email. This release does not change that project setting.
 4. Check hosted signup, two-account sharing, private file transfer and phone permissions with owner-controlled accounts before inviting others.
 
@@ -56,6 +56,8 @@ For normal machines, `flutter analyze` and `dart format lib test tool` are stand
 
 ## Create real accounts
 
+For the reproducible 1.0.1 release use `FLUTTER_BIN=/path/to/flutter tool/build_netlify.sh` (Flutter 3.47.5, Python 3), then the browser checks described in the release notes.
+
 See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email sender and deployment steps. Create a landlord account and a property, then create the tenant record and share its private invitation. Tenants can also register into a genuinely vacant room using the property code. With Confirm email disabled for development, account creation does not wait for confirmation mail. Landlords can record received money directly; tenant-reported money awaits landlord reconciliation. No sample accounts or seed records are created by the application.
 
 ## Architecture and tests
@@ -76,7 +78,7 @@ Implementation uses Flutter/Dart, shared_preferences, cryptography, geolocator, 
 
 ## Download the prepared app
 
-- [Compiled website ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Research-web.zip?raw=true) — upload the ZIP using the existing Netlify project’s **Already built it? → choose a file** control. Flutter is not required on your PC.
-- [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Research-source.zip?raw=true) — editable Flutter project.
+- [Compiled website ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Netlify-web.zip?raw=true) — upload the ZIP using the existing Netlify project’s **Already built it? → choose a file** control. Flutter is not required on your PC.
+- [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Netlify-source.zip?raw=true) — editable Flutter project.
 
 The website is not deployed by uploading these files to GitHub. Hosting and Android testing are separate steps.

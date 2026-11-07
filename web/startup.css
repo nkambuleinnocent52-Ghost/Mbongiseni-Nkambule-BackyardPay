@@ -1,0 +1,6 @@
+html, body { margin: 0; min-height: 100%; background: #090a0c; color: #f5f1e7; font-family: system-ui, sans-serif; }
+#startup { box-sizing: border-box; max-width: 36rem; margin: 18vh auto 0; padding: 2rem; text-align: center; }
+#startup h1 { color: #e8be62; font-size: 2rem; }
+#startup p { line-height: 1.6; }
+#startup button { border: 0; border-radius: .8rem; padding: .9rem 1.2rem; background: #e8be62; color: #211b0d; font: inherit; cursor: pointer; }
+#startup button:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
