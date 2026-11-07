@@ -301,10 +301,12 @@ String? requiredField(String? value) =>
 class FieldSpec {
   final String keyName, label, initial;
   final bool secret, numeric, multiline, optional;
+  final List<String>? options;
   const FieldSpec(
     this.keyName,
     this.label, {
     this.initial = '',
+    this.options,
     this.secret = false,
     this.numeric = false,
     this.multiline = false,
@@ -316,11 +318,13 @@ class EditorPage extends StatefulWidget {
   final String title, button, help;
   final List<FieldSpec> fields;
   final Future<void> Function(Map<String, String>) save;
+  final Widget Function(BuildContext, Map<String, String>)? preview;
   const EditorPage({
     super.key,
     required this.title,
     required this.fields,
     required this.save,
+    this.preview,
     this.button = 'Save',
     this.help = '',
   });
@@ -375,18 +379,44 @@ class _EditorPageState extends State<EditorPage> {
             for (final f in widget.fields)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: TextFormField(
-                  key: ValueKey(f.keyName),
-                  controller: controls[f.keyName],
-                  decoration: InputDecoration(labelText: f.label),
-                  obscureText: f.secret,
-                  keyboardType: f.numeric
-                      ? const TextInputType.numberWithOptions(decimal: true)
-                      : TextInputType.text,
-                  maxLines: f.multiline ? 3 : 1,
-                  validator: f.optional ? null : requiredField,
-                  enabled: !busy,
-                ),
+                child: f.options != null
+                    ? DropdownButtonFormField<String>(
+                        initialValue: f.initial,
+                        isExpanded: true,
+                        decoration: InputDecoration(labelText: f.label),
+                        items: f.options!
+                            .map(
+                              (s) => DropdownMenuItem(value: s, child: Text(s)),
+                            )
+                            .toList(),
+                        onChanged: busy
+                            ? null
+                            : (v) => setState(
+                                () => controls[f.keyName]!.text = v!,
+                              ),
+                      )
+                    : TextFormField(
+                        onChanged: (_) {
+                          if (widget.preview != null) setState(() {});
+                        },
+                        key: ValueKey(f.keyName),
+                        controller: controls[f.keyName],
+                        decoration: InputDecoration(labelText: f.label),
+                        obscureText: f.secret,
+                        keyboardType: f.numeric
+                            ? const TextInputType.numberWithOptions(
+                                decimal: true,
+                              )
+                            : TextInputType.text,
+                        maxLines: f.multiline ? 3 : 1,
+                        validator: f.optional ? null : requiredField,
+                        enabled: !busy,
+                      ),
+              ),
+            if (widget.preview != null)
+              widget.preview!(
+                context,
+                controls.map((k, c) => MapEntry(k, c.text)),
               ),
             if (error != null)
               Text(

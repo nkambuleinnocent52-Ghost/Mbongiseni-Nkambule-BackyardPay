@@ -1,4 +1,4 @@
-"""Package the rebuilt 1.0.1 release after integrity checks; preserve the old flagged ZIP."""
+"""Package the rebuilt current release after integrity checks; preserve the old flagged ZIP."""
 from pathlib import Path
 import hashlib
 import json

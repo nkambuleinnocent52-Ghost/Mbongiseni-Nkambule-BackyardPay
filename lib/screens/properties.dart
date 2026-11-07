@@ -1,3 +1,5 @@
+import '../data/research_ledger.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -46,6 +48,19 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
     EditorPage(
       title: property == null ? 'Add property' : 'Edit property',
       help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. No payment processing is performed.',
+      preview: (context, v) {
+        try {
+          final cents = parseMoney(v['rent']!);
+          final now = DateTime.now();
+          return panel(
+            Text(
+              'Daily equivalent this month (${daysInMonth(now)} days): approximately ${money((cents / daysInMonth(now)).round())}. The exact move-in month determines the calculation; daily amounts are not rounded before multiplying.',
+            ),
+          );
+        } catch (_) {
+          return const SizedBox.shrink();
+        }
+      },
       fields: [
         FieldSpec('name', 'Property name', initial: property?.name ?? ''),
         FieldSpec(
@@ -73,6 +88,14 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
           numeric: true,
         ),
         FieldSpec(
+          'proration',
+          'First month billing',
+          initial: (property?.prorateFirstMonth ?? true)
+              ? 'Prorate actual calendar days'
+              : 'Charge full month',
+          options: const ['Prorate actual calendar days', 'Charge full month'],
+        ),
+        FieldSpec(
           'due',
           'Due day of month (1–28)',
           initial: '${property?.dueDay ?? 1}',
@@ -90,6 +113,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
           rooms: int.tryParse(v['rooms']!) ?? 0,
           rentCents: parseMoney(v['rent']!),
           dueDay: int.tryParse(v['due']!) ?? 0,
+          prorateFirstMonth: v['proration'] == 'Prorate actual calendar days',
         );
       },
     ),
@@ -188,6 +212,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
               detail('Occupied', '$occupied'),
               detail('Available', '${p.rooms - occupied}'),
               detail('Rent for new tenants', money(p.rentCents)),
+              detail(
+                'First month billing',
+                p.prorateFirstMonth
+                    ? 'Actual calendar days from move-in, inclusive'
+                    : 'Full month by agreement',
+              ),
               detail('Due day', '${p.dueDay}'),
               SelectableText('Property code: ${p.code}'),
               if (landlord)

@@ -1,3 +1,5 @@
+import '../data/research_ledger.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -60,6 +62,34 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
             context,
             EditorPage(
               title: 'Tenant and room',
+              preview: (context, v) {
+                try {
+                  final date = checkedDate(v['start']!);
+                  final property = store.property(propertyId!);
+                  return panel(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        heading('First rental charge'),
+                        Text(
+                          firstChargeExplanation(
+                            property.rentCents,
+                            date,
+                            property.prorateFirstMonth,
+                          ),
+                        ),
+                        const Text(
+                          'Confirm this move-in date and billing basis with the tenant. The deposit is separate.',
+                        ),
+                      ],
+                    ),
+                  );
+                } catch (_) {
+                  return const Text(
+                    'Enter a valid move-in date to calculate the first charge.',
+                  );
+                }
+              },
               help: 'Record only necessary contact information. This does not verify ownership or create a signed lease.',
               fields: [
                 const FieldSpec('name', 'Tenant full name'),

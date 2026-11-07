@@ -24,3 +24,8 @@ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/te
 if [ -f supabase/tests/research_accounts.sql ]; then
  docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/research_accounts.sql
 fi
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/proration_legacy_fixture.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611070001_first_month_proration.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611070001_first_month_proration.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/first_month_proration.sql

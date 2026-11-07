@@ -535,6 +535,7 @@ class AppStore extends ChangeNotifier {
     String suburb = '',
     String city = '',
     String postalCode = '',
+    bool prorateFirstMonth = true,
   }) async {
     if (cloud != null)
       return await _remote('property', {
@@ -547,6 +548,7 @@ class AppStore extends ChangeNotifier {
         'suburb': suburb.trim(),
         'city': city.trim(),
         'postalCode': postalCode.trim(),
+        'prorateFirstMonth': prorateFirstMonth,
       }) as String;
     final a = _user(Role.landlord);
     if (name.trim().length < 2 ||
@@ -581,6 +583,7 @@ class AppStore extends ChangeNotifier {
         postalCode: postalCode.trim(),
         code: old?.code ?? 'BP-${_uuid.v4().substring(0, 8).toUpperCase()}',
         rooms: rooms,
+        prorateFirstMonth: prorateFirstMonth,
         rentCents: rentCents,
         dueDay: dueDay,
         latitude: old?.latitude,
@@ -686,13 +689,19 @@ class AppStore extends ChangeNotifier {
 
   DateTime dueDate(Tenancy t, String period) {
     final month = periodDate(period);
-    return DateTime(
+    final normal = DateTime(
       month.year,
       month.month,
       researchReady
           ? (research.rate(t, period)?['dueDay'] as int? ?? t.dueDay)
           : t.dueDay,
     );
+    if (t.record['firstMonthProration'] == 'actual_days' &&
+        period == t.startPeriod) {
+      final start = DateTime.parse(t.record['tenancyStartedOn']);
+      if (start.isAfter(normal)) return start;
+    }
+    return normal;
   }
 
   bool isLate(RentPayment p) => DateTime(

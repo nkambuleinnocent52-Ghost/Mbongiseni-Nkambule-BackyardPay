@@ -1,3 +1,5 @@
+import '../data/research_ledger.dart';
+
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -177,6 +179,14 @@ Future<Uint8List> accountStatementPdf(AppStore store, String tenancyId) async {
         ),
         _row('Landlord', store.landlordFor(t).name),
         _row('Account begins', t.startPeriod),
+        if (t.record['firstMonthProration'] != null)
+          pw.Text(
+            firstChargeExplanation(
+              t.rentCents,
+              DateTime.parse(t.record['tenancyStartedOn']),
+              t.record['firstMonthProration'] == 'actual_days',
+            ),
+          ),
         pw.SizedBox(height: 12),
         pw.TableHelper.fromTextArray(
           headers: [

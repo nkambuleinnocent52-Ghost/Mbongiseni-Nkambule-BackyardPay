@@ -11,6 +11,10 @@ class CloudGateway {
       throw StateError(
         'Run the Research Update SQL in Supabase before using this version. Existing records have not been erased.',
       );
+    if (data['prorationVersion'] != 1)
+      throw StateError(
+        'Run BackyardPay-Proration-Update.sql in Supabase before using this update. Existing rental balances have been preserved.',
+      );
     return data;
   }
 
@@ -37,6 +41,7 @@ class CloudGateway {
   static Map<String, dynamic> get emptySnapshot => {
     'version': 1,
     'researchVersion': 2,
+    'prorationVersion': 1,
     'rentTerms': [],
     'caseRecords': [],
     'session': null,

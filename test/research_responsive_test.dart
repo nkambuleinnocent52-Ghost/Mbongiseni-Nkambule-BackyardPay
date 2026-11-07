@@ -45,4 +45,32 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  testWidgets('onboarding previews January 15 charge before saving', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      StoreScope(
+        store: store,
+        child: MaterialApp(
+          theme: backyardTheme(),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => createTenantRecord(context),
+                child: const Text('Onboard'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Onboard'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enter tenant details'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('start')), '2026-01-15');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('R 822.58'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

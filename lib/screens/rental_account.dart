@@ -1,3 +1,4 @@
+import '../data/research_ledger.dart';
 import 'documents.dart';
 
 import 'package:flutter/material.dart';
@@ -97,6 +98,16 @@ class RentalAccountScreen extends StatelessWidget {
           icon: Icons.download_outlined,
         ),
         if (store.researchReady) ...[
+          if (t.record['firstMonthProration'] != null)
+            panel(
+              Text(
+                firstChargeExplanation(
+                  t.rentCents,
+                  DateTime.parse(t.record['tenancyStartedOn']),
+                  t.record['firstMonthProration'] == 'actual_days',
+                ),
+              ),
+            ),
           heading('Dated rent terms'),
           for (final term in store.rentTerms.where(
             (r) => r['tenancyId'] == t.id,

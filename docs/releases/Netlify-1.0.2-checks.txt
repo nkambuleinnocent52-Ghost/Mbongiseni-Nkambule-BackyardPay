@@ -1,0 +1,15 @@
+BackyardPay 1.0.2 (build 3): first-month calendar-day rent
+
+Flutter suite: 37 passed, plus a subsequent 3-test proration run including the added due-date check (38 distinct tests in total).
+Static analysis: 35 Dart files, zero issues.
+Web release build: passed with CSP/local renderer resources.
+Startup/browser checks: passed.
+Two-session browser/API contract: passed with automatically prorated payment; transport simulated.
+PostgreSQL: original access/research checks passed; first-month migration applied twice; 28/29/30/31 day arithmetic, old-balance preservation, setting snapshots, tenant signup, immutable billing basis and allocation limits passed.
+Archive validation: 47 files, required entry assets present, safe archive paths and per-file hashes checked.
+ClamAV 1.5.4: archive OK; infected files 0. Database 28171 dated 1 November 2026. This is not a Microsoft Defender verdict.
+
+Web ZIP SHA-256:
+46e90ffbe47b5d7b26edc7784f3d80c25b21cd67652653fb19b7521dac3fa383
+
+The hosted Supabase migration and deployment must be activated by the project owner. No production records or Auth/email settings were changed from this workspace.

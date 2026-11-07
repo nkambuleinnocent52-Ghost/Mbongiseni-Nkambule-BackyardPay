@@ -14,7 +14,7 @@ const snapshot=u=>{
  const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
  const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
  const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
- return {version:1,researchVersion:2,rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:[],session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+ return {version:1,researchVersion:2,prorationVersion:1,rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:[],session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
 };
 let browser;
 let recoveryEmail;
@@ -30,7 +30,7 @@ let recoveryEmail;
     const u={id:crypto.randomUUID(),email:body.email,password:body.password,...body.data,salt:'',passwordHash:''};users.push(u);
     if(u.role==='tenant'){
      const p=properties.find(p=>p.code===u.code);assert(p);assert(!tenancies.some(t=>t.propertyId===p.id&&t.room===u.room));
-     tenancies.push({id:crypto.randomUUID(),userId:u.id,propertyId:p.id,room:u.room,startPeriod:now().slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay});
+     tenancies.push({id:crypto.randomUUID(),userId:u.id,propertyId:p.id,room:u.room,startPeriod:now().slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay,ledgerVersion:2,record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:now().slice(0,10)}});
     }
     return reply(session(u));
    }
@@ -83,12 +83,13 @@ let recoveryEmail;
  for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2']])await fill(owner,name,value);
  await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();await button(owner,'Back');
  const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');
+ const today=new Date(),monthDays=new Date(today.getUTCFullYear(),today.getUTCMonth()+1,0).getUTCDate();const firstCents=Math.round(150000*(monthDays-today.getUTCDate()+1)/monthDays);const paymentLabel=`Tenant Test • R ${(firstCents/100).toFixed(2)}`;
  await button(tenant,'Record payment');await button(tenant,'Submit payment');await tenant.getByText(/^PENDING$/).first().waitFor();
- await button(owner,'Refresh records');await button(owner,'Payment records');await owner.getByText('Tenant Test • R 1500.00',{exact:false}).click();
+ await button(owner,'Refresh records');await button(owner,'Payment records');await owner.getByText(paymentLabel,{exact:false}).click();
  await button(owner,'Confirm payment');const cb=owner.getByRole('checkbox');for(let i=0;i<12;i++){const b=await cb.boundingBox();if(b&&b.y>0&&b.y+b.height<950)break;await owner.mouse.move(1050,700);await owner.mouse.wheel(0,400);await owner.waitForTimeout(150);}await cb.click();await button(owner,'Confirm received');await owner.getByText(/^CONFIRMED$/).first().waitFor();
  await button(tenant,'Back to dashboard');await button(tenant,'Refresh records');
  assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'));
- await button(tenant,'Payment history');await tenant.getByText('Tenant Test • R 1500.00',{exact:false}).click();
+ await button(tenant,'Payment history');await tenant.getByText(paymentLabel,{exact:false}).click();
  const downloadPromise=tenant.waitForEvent('download');await button(tenant,'Download / share receipt');const download=await downloadPromise;
  const bytes=fs.readFileSync(await download.path());assert.equal(bytes.subarray(0,4).toString(),'%PDF');fs.writeFileSync(dir+'/receipt.pdf',bytes);
  await tenant.screenshot({path:dir+'/confirmed-payment.png'});

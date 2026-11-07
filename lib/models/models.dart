@@ -71,6 +71,7 @@ class RentalProperty {
     postalCode,
   ].where((s) => s.trim().isNotEmpty).join(', ');
   final int rooms, rentCents, dueDay;
+  final bool prorateFirstMonth;
   final double? latitude, longitude;
   const RentalProperty({
     required this.id,
@@ -83,6 +84,7 @@ class RentalProperty {
     required this.dueDay,
     this.latitude,
     this.longitude,
+    this.prorateFirstMonth = true,
     this.suburb = '',
     this.city = '',
     this.postalCode = '',
@@ -96,6 +98,7 @@ class RentalProperty {
     city: j['city'] ?? '',
     postalCode: j['postalCode'] ?? '',
     code: j['code'],
+    prorateFirstMonth: j['prorateFirstMonth'] ?? false,
     rooms: j['rooms'],
     rentCents: j['rentCents'],
     dueDay: j['dueDay'],
@@ -111,6 +114,7 @@ class RentalProperty {
     'city': city,
     'postalCode': postalCode,
     'code': code,
+    'prorateFirstMonth': prorateFirstMonth,
     'rooms': rooms,
     'rentCents': rentCents,
     'dueDay': dueDay,

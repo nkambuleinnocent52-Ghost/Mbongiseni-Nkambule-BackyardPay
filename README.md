@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Latest release: 1.0.1, build 2.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.1.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
+> **Latest release: 1.0.2, build 3.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.2.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -16,6 +16,8 @@ The black/gold design is retained. See the [research implementation audit](docs/
 - Separate stakeholder dashboards show relevant records, credit, attention items and actions. Location, optional active-browser alerts and in-app notifications remain.
 
 ## Activate the update
+
+**For 1.0.2:** after the Research Update, run [BackyardPay-Proration-Update.sql](downloads/BackyardPay-Proration-Update.sql) before publishing the latest ZIP. [Calendar-day billing and history preservation](docs/releases/Netlify-1.0.2.md).
 
 1. Export/back up the existing Supabase database. Run [BackyardPay-Research-Update.sql](downloads/BackyardPay-Research-Update.sql) in that project's SQL Editor. It is additive and retains existing accounts/payments. Do not rerun the original migration afterwards, which would restore old RPC definitions.
 2. Use the rebuilt [BackyardPay-Netlify-web.zip](downloads/BackyardPay-Netlify-web.zip) for Netlify after its normal browser/Windows checks. The ZIP has `index.html` at its root.
@@ -56,7 +58,7 @@ For normal machines, `flutter analyze` and `dart format lib test tool` are stand
 
 ## Create real accounts
 
-For the reproducible 1.0.1 release use `FLUTTER_BIN=/path/to/flutter tool/build_netlify.sh` (Flutter 3.47.5, Python 3), then the browser checks described in the release notes.
+For the reproducible release use `FLUTTER_BIN=/path/to/flutter tool/build_netlify.sh` (Flutter 3.47.5, Python 3), then the browser checks described in the release notes.
 
 See [cloud setup](docs/cloud-setup.md) for the SQL migration, Auth URLs, email sender and deployment steps. Create a landlord account and a property, then create the tenant record and share its private invitation. Tenants can also register into a genuinely vacant room using the property code. With Confirm email disabled for development, account creation does not wait for confirmation mail. Landlords can record received money directly; tenant-reported money awaits landlord reconciliation. No sample accounts or seed records are created by the application.
 
