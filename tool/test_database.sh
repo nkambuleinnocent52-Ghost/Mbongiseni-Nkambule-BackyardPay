@@ -46,3 +46,7 @@ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/te
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611080001_simple_rentals.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611080001_simple_rentals.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/simple_rentals.sql
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611080002_south_african_dates.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611080002_south_african_dates.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/south_african_dates.sql
