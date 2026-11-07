@@ -39,7 +39,7 @@ export XDG_CONFIG_HOME=/workspace/.config
 export FLUTTER_SUPPRESS_ANALYTICS=true
 flutter pub get --enforce-lockfile
 flutter test --no-pub
-flutter build web --no-pub --no-web-resources-cdn
+flutter build web --release --no-pub --csp --pwa-strategy=none --no-web-resources-cdn --no-wasm-dry-run
 python3 -m http.server 8080 --bind 127.0.0.1 --directory build/web
 ```
 
