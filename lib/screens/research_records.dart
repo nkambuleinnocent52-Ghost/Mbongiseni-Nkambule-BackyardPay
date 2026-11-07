@@ -1,3 +1,4 @@
+import 'room_availability.dart';
 import 'documents.dart';
 import '../data/research_ledger.dart';
 
@@ -57,6 +58,7 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
           onChanged: (v) => setState(() => propertyId = v),
         ),
         gap(16),
+        RoomAvailability(propertyId: propertyId!),
         if (store.isCloud &&
             store.property(propertyId!).securityDepositCents == null)
           const Text(
@@ -79,6 +81,10 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              RoomAvailability(
+                                propertyId: propertyId!,
+                                moveIn: date,
+                              ),
                               heading('Move-in costs'),
                               detail(
                                 'Security deposit',
@@ -142,15 +148,40 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                         'Email (optional)',
                         optional: true,
                       ),
-                      const FieldSpec('room', 'Room number', numeric: true),
                       FieldSpec(
                         'start',
                         'Actual occupancy start (YYYY-MM-DD)',
                         initial: isoDay(DateTime.now()),
                       ),
+                      FieldSpec(
+                        'room',
+                        'Available room',
+                        optionPrefix: 'Room ',
+                        emptyOptionsMessage:
+                            'No rooms available for this move-in date',
+                        optionsForValues: (v) {
+                          try {
+                            return store
+                                .availableRoomNumbers(
+                                  propertyId!,
+                                  from: checkedDate(v['start']!),
+                                )
+                                .map((n) => '$n')
+                                .toList();
+                          } catch (_) {
+                            return [];
+                          }
+                        },
+                      ),
                     ],
                     save: (v) async {
-                      checkedDate(v['start']!);
+                      final date = checkedDate(v['start']!);
+                      if (!store
+                          .availableRoomNumbers(propertyId!, from: date)
+                          .contains(int.tryParse(v['room']!)))
+                        throw StateError(
+                          'This room is no longer available. Refresh and choose another room.',
+                        );
                       await store.researchAction('tenancy', {
                         'propertyId': propertyId,
                         'name': v['name'],
@@ -277,7 +308,9 @@ class RentalRecordsScreen extends StatelessWidget {
                       ),
                     ),
                     if (['repair', 'query'].contains(row['kind']))
-                      StatusPill(_caseStatusLabel(store.research.caseStatus(row))),
+                      StatusPill(
+                        _caseStatusLabel(store.research.caseStatus(row)),
+                      ),
                   ],
                 ),
                 gap(8),
@@ -355,7 +388,14 @@ String _fieldLabel(String key) =>
       'keysMeters': 'Keys / meters / facilities',
     }[key] ??
     key;
-String _caseStatusLabel(String status) => const {'in_progress':'In progress','resolved':'Resolved','open':'Open','comment':'Message'}[status] ?? status;
+String _caseStatusLabel(String status) =>
+    const {
+      'in_progress': 'In progress',
+      'resolved': 'Resolved',
+      'open': 'Open',
+      'comment': 'Message',
+    }[status] ??
+    status;
 String _recordTitle(Map<String, dynamic> r) => r['kind'] == 'deposit'
     ? 'Deposit • ${r['body']['event']}'
     : r['kind'] == 'inspection'

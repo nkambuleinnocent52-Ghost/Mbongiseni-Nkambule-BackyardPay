@@ -1,3 +1,4 @@
+import 'room_availability.dart';
 import '../data/research_ledger.dart';
 
 import 'package:flutter/material.dart';
@@ -198,13 +199,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     if (p == null)
       return const PageShell(title: 'Property removed', children: []);
     final landlord = store.currentUser!.role == Role.landlord;
-    final occupied = store.tenancies
-        .where((t) => t.propertyId == p.id && store.isOccupied(t))
-        .length;
     return PageShell(
       title: 'Property details',
       children: [
         heading(p.name),
+        if (landlord) RoomAvailability(propertyId: p.id),
         if (landlord && p.city.isEmpty)
           panel(
             const Text(
@@ -218,8 +217,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             children: [
               detail('Address', p.fullAddress),
               detail('Total rooms', '${p.rooms}'),
-              detail('Occupied', '$occupied'),
-              detail('Available', '${p.rooms - occupied}'),
+              if (landlord)
+                detail(
+                  'Available for a new tenancy',
+                  '${store.availableRoomNumbers(p.id).length}',
+                ),
               detail('Rent for new tenants', money(p.rentCents)),
               detail(
                 'Security deposit for new tenants',
@@ -281,7 +283,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             () => editProperty(context, p),
             icon: Icons.edit_outlined,
           ),
-          if (occupied == 0)
+          if (!store.tenancies.any((t) => t.propertyId == p.id))
             TextButton(
               onPressed: () async {
                 final yes = await showDialog<bool>(

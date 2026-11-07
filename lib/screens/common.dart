@@ -302,11 +302,16 @@ class FieldSpec {
   final String keyName, label, initial;
   final bool secret, numeric, multiline, optional;
   final List<String>? options;
+  final List<String> Function(Map<String, String>)? optionsForValues;
+  final String optionPrefix, emptyOptionsMessage;
   const FieldSpec(
     this.keyName,
     this.label, {
     this.initial = '',
     this.options,
+    this.optionsForValues,
+    this.optionPrefix = '',
+    this.emptyOptionsMessage = 'No choices available',
     this.secret = false,
     this.numeric = false,
     this.multiline = false,
@@ -366,71 +371,96 @@ class _EditorPageState extends State<EditorPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => PageShell(
-    title: widget.title,
-    maxWidth: 680,
-    children: [
-      if (widget.help.isNotEmpty) panel(Text(widget.help)),
-      Form(
-        key: form,
-        child: Column(
-          children: [
-            for (final f in widget.fields)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: f.options != null
-                    ? DropdownButtonFormField<String>(
-                        initialValue: f.initial,
-                        isExpanded: true,
-                        decoration: InputDecoration(labelText: f.label),
-                        items: f.options!
-                            .map(
-                              (s) => DropdownMenuItem(value: s, child: Text(s)),
-                            )
-                            .toList(),
-                        onChanged: busy
-                            ? null
-                            : (v) => setState(
-                                () => controls[f.keyName]!.text = v!,
-                              ),
-                      )
-                    : TextFormField(
-                        onChanged: (_) {
-                          if (widget.preview != null) setState(() {});
-                        },
-                        key: ValueKey(f.keyName),
-                        controller: controls[f.keyName],
-                        decoration: InputDecoration(labelText: f.label),
-                        obscureText: f.secret,
-                        keyboardType: f.numeric
-                            ? const TextInputType.numberWithOptions(
-                                decimal: true,
-                              )
-                            : TextInputType.text,
-                        maxLines: f.multiline ? 3 : 1,
-                        validator: f.optional ? null : requiredField,
-                        enabled: !busy,
-                      ),
-              ),
-            if (widget.preview != null)
-              widget.preview!(
-                context,
-                controls.map((k, c) => MapEntry(k, c.text)),
-              ),
-            if (error != null)
-              Text(
-                error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            action(
-              busy ? 'Saving…' : widget.button,
-              busy ? null : submit,
-              icon: Icons.save_outlined,
-            ),
-          ],
-        ),
+  Widget optionsField(FieldSpec f) {
+    final values = controls.map((k, c) => MapEntry(k, c.text));
+    final choices = f.optionsForValues?.call(values) ?? f.options!;
+    final selected = choices.contains(controls[f.keyName]!.text)
+        ? controls[f.keyName]!.text
+        : null;
+    return DropdownButtonFormField<String>(
+      key: ValueKey('${f.keyName}:${choices.join(',')}:$selected'),
+      initialValue: selected,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: f.label,
+        helperText: choices.isEmpty ? f.emptyOptionsMessage : null,
+        helperMaxLines: 2,
       ),
-    ],
-  );
+      disabledHint: Text(f.emptyOptionsMessage),
+      items: choices
+          .map(
+            (s) =>
+                DropdownMenuItem(value: s, child: Text('${f.optionPrefix}$s')),
+          )
+          .toList(),
+      validator: (v) => f.optional
+          ? null
+          : choices.isEmpty
+          ? f.emptyOptionsMessage
+          : v == null
+          ? 'Choose an available option'
+          : null,
+      onChanged: busy || choices.isEmpty
+          ? null
+          : (v) => setState(() => controls[f.keyName]!.text = v!),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.fields.any((f) => f.optionsForValues != null))
+      StoreScope.of(context);
+    return PageShell(
+      title: widget.title,
+      maxWidth: 680,
+      children: [
+        if (widget.help.isNotEmpty) panel(Text(widget.help)),
+        Form(
+          key: form,
+          child: Column(
+            children: [
+              for (final f in widget.fields)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: f.options != null || f.optionsForValues != null
+                      ? optionsField(f)
+                      : TextFormField(
+                          onChanged: (_) {
+                            if (widget.preview != null) setState(() {});
+                          },
+                          key: ValueKey(f.keyName),
+                          controller: controls[f.keyName],
+                          decoration: InputDecoration(labelText: f.label),
+                          obscureText: f.secret,
+                          keyboardType: f.numeric
+                              ? const TextInputType.numberWithOptions(
+                                  decimal: true,
+                                )
+                              : TextInputType.text,
+                          maxLines: f.multiline ? 3 : 1,
+                          validator: f.optional ? null : requiredField,
+                          enabled: !busy,
+                        ),
+                ),
+              if (widget.preview != null)
+                widget.preview!(
+                  context,
+                  controls.map((k, c) => MapEntry(k, c.text)),
+                ),
+              if (error != null)
+                Text(
+                  error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              action(
+                busy ? 'Saving…' : widget.button,
+                busy ? null : submit,
+                icon: Icons.save_outlined,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

@@ -1,3 +1,5 @@
+import 'room_availability.dart';
+
 import 'dart:convert';
 
 import 'cloud_gateway.dart';
@@ -872,6 +874,17 @@ class AppStore extends ChangeNotifier {
       throw ArgumentError('Enter a reminder message.');
     await _transaction(
       () => _notice(t.userId, 'Rent reminder • $period', message.trim()),
+    );
+  }
+
+  List<int> availableRoomNumbers(String propertyId, {DateTime? from}) {
+    _user(Role.landlord);
+    final p = property(propertyId);
+    return availableRoomsFor(
+      p,
+      tenancies,
+      from ?? DateTime.now(),
+      actualHandover: researchReady,
     );
   }
 

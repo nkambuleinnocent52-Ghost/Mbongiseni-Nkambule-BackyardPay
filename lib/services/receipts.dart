@@ -234,7 +234,14 @@ Future<Uint8List> accountStatementPdf(AppStore store, String tenancyId) async {
           money(rows.isEmpty ? 0 : rows.last.closingBalanceCents),
         ),
         if (store.researchReady) ...[
-          if(store.research.depositOutstanding(t)!=null) _row('Total recorded rent + deposit due',money((rows.isEmpty?0:rows.last.closingBalanceCents)+store.research.depositOutstanding(t)!)),
+          if (store.research.depositOutstanding(t) != null)
+            _row(
+              'Total recorded rent + deposit due',
+              money(
+                (rows.isEmpty ? 0 : rows.last.closingBalanceCents) +
+                    store.research.depositOutstanding(t)!,
+              ),
+            ),
           _row('Unallocated received credit', money(store.creditFor(t))),
           _row('Tenant reports awaiting review', money(store.pendingFor(t))),
           _row(

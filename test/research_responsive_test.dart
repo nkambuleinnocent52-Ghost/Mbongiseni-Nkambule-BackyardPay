@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/store.dart';
@@ -72,6 +73,7 @@ void main() {
     );
     await tester.tap(find.text('Onboard'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Enter tenant details'),250,scrollable:find.byType(Scrollable).first);
     await tester.tap(find.text('Enter tenant details'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('start')), '2026-01-15');
@@ -80,4 +82,62 @@ void main() {
     expect(find.textContaining('R 2822.58'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'onboarding offers only available rooms and lists occupied room',
+    (tester) async {
+      await tester.pumpWidget(
+        StoreScope(
+          store: store,
+          child: MaterialApp(
+            theme: backyardTheme(),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => createTenantRecord(context),
+                  child: const Text('Onboard'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Onboard'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Enter tenant details'),250,scrollable:find.byType(Scrollable).first);
+      await tester.tap(find.text('Enter tenant details'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextFormField, 'Room number'), findsNothing);
+      final dropdown = find.byWidgetPredicate(
+        (w) =>
+            w is DropdownButtonFormField<String> &&
+            w.decoration.labelText == 'Available room',
+      );
+      expect(dropdown, findsOneWidget);
+      await tester.ensureVisible(dropdown);
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      expect(find.text('Room 1'), findsNothing);
+      expect(find.text('Room 2'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('room selection is cleared if another tenancy takes the room', (tester) async {
+    await tester.pumpWidget(StoreScope(store:store,child:MaterialApp(theme:backyardTheme(),home:Builder(builder:(context)=>Scaffold(body:TextButton(onPressed:()=>createTenantRecord(context),child:const Text('Onboard')))))));
+    await tester.tap(find.text('Onboard'));await tester.pumpAndSettle();await tester.scrollUntilVisible(find.text('Enter tenant details'),250,scrollable:find.byType(Scrollable).first);await tester.tap(find.text('Enter tenant details'));await tester.pumpAndSettle();
+    final finder=find.byWidgetPredicate((w)=>w is DropdownButtonFormField<String> && w.decoration.labelText=='Available room');
+    await tester.ensureVisible(finder);await tester.tap(finder);await tester.pumpAndSettle();await tester.tap(find.text('Room 2').last);await tester.pumpAndSettle();
+    expect((tester.widget(finder) as DropdownButtonFormField<String>).initialValue,'2');
+    final storage=store.storage as MemoryStorage;final data=jsonDecode(storage.data!) as Map<String,dynamic>;data['researchVersion']=2;
+    data['tenancies'].add({...data['tenancies'][0],'id':'new-room-2','room':'2','userId':''});storage.data=jsonEncode(data);await store.load();await tester.pumpAndSettle();
+    expect((tester.widget(finder) as DropdownButtonFormField<String>).initialValue,isNull);expect(tester.takeException(),isNull);
+  });
+  testWidgets('a full property shows no selectable rooms', (tester) async {
+    final storage=store.storage as MemoryStorage;final data=jsonDecode(storage.data!) as Map<String,dynamic>;data['researchVersion']=2;
+    for(var n=2;n<=4;n++)data['tenancies'].add({...data['tenancies'][0],'id':'full-$n','room':'$n','userId':''});storage.data=jsonEncode(data);await store.load();
+    await tester.pumpWidget(StoreScope(store:store,child:MaterialApp(theme:backyardTheme(),home:Builder(builder:(context)=>Scaffold(body:TextButton(onPressed:()=>createTenantRecord(context),child:const Text('Onboard')))))));
+    await tester.tap(find.text('Onboard'));await tester.pumpAndSettle();await tester.scrollUntilVisible(find.text('Enter tenant details'),250,scrollable:find.byType(Scrollable).first);await tester.tap(find.text('Enter tenant details'));await tester.pumpAndSettle();
+    final finder=find.byWidgetPredicate((w)=>w is DropdownButtonFormField<String> && w.decoration.labelText=='Available room');
+    final inner=find.descendant(of:finder,matching:find.byWidgetPredicate((w)=>w is DropdownButton<String>)).first;expect((tester.widget(inner) as DropdownButton<String>).onChanged,isNull);expect(find.textContaining('No rooms available'),findsWidgets);expect(tester.takeException(),isNull);
+  });
+
 }
