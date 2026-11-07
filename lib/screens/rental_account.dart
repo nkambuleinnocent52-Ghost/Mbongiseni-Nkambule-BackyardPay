@@ -1,3 +1,4 @@
+import 'rental_costs.dart';
 import '../data/research_ledger.dart';
 import 'documents.dart';
 
@@ -275,6 +276,7 @@ class RentalDetailsView extends StatelessWidget {
                 : Column(children: parties);
           },
         ),
+        if (store.researchReady) RentalCosts(tenancy: t),
         heading('Rental terms'),
         if (!t.agreementRecorded)
           panel(
@@ -284,7 +286,7 @@ class RentalDetailsView extends StatelessWidget {
                 const StatusPill('Incomplete rental record'),
                 gap(12),
                 const Text(
-                  'The monthly rent and room are linked, but the start date, deposit and responsibilities have not been completed. Missing information is not assumed.',
+                  'The room and initial financial terms are linked. Complete the remaining lease particulars and responsibilities; missing terms are not assumed.',
                   style: TextStyle(color: Palette.muted, height: 1.8),
                 ),
               ],
@@ -297,7 +299,9 @@ class RentalDetailsView extends StatelessWidget {
               detail('Rental type', t.agreementType),
               detail(
                 'Occupancy starts',
-                t.leaseStart == null
+                t.record['tenancyStartedOn'] != null
+                    ? dateLabel(DateTime.parse(t.record['tenancyStartedOn']))
+                    : t.leaseStart == null
                     ? 'Not recorded'
                     : dateLabel(t.leaseStart!),
               ),

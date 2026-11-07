@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Latest release: 1.0.2, build 3.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.2.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
+> **Latest release: 1.0.3, build 4.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.0.3.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -17,7 +17,7 @@ The black/gold design is retained. See the [research implementation audit](docs/
 
 ## Activate the update
 
-**For 1.0.2:** after the Research Update, run [BackyardPay-Proration-Update.sql](downloads/BackyardPay-Proration-Update.sql) before publishing the latest ZIP. [Calendar-day billing and history preservation](docs/releases/Netlify-1.0.2.md).
+**For 1.0.3:** after the Research Update, run [BackyardPay-Deposit-Reports-Update.sql](downloads/BackyardPay-Deposit-Reports-Update.sql) before publishing the latest ZIP. This includes the prior Proration update. [Deposit, onboarding and report workflows](docs/releases/Netlify-1.0.3.md).
 
 1. Export/back up the existing Supabase database. Run [BackyardPay-Research-Update.sql](downloads/BackyardPay-Research-Update.sql) in that project's SQL Editor. It is additive and retains existing accounts/payments. Do not rerun the original migration afterwards, which would restore old RPC definitions.
 2. Use the rebuilt [BackyardPay-Netlify-web.zip](downloads/BackyardPay-Netlify-web.zip) for Netlify after its normal browser/Windows checks. The ZIP has `index.html` at its root.

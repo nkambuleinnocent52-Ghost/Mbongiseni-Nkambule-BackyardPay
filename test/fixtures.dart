@@ -15,6 +15,7 @@ Future<void> seedTestAccounts(AppStore store) async {
     address: 'Test Address',
     rooms: 4,
     rentCents: 150000,
+    securityDepositCents: 200000,
     dueDay: 1,
   );
   final code = store.property(id).code;

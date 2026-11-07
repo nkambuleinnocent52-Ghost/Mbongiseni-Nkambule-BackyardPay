@@ -1,3 +1,5 @@
+import 'rental_costs.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -323,12 +325,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                   ),
+                if (!owner && first != null) RentalCosts(tenancy: first),
+                if (owner)
+                  detail(
+                    'Security deposits still due',
+                    money(
+                      ts.fold<int>(
+                        0,
+                        (sum, t) =>
+                            sum + (store.research.depositOutstanding(t) ?? 0),
+                      ),
+                    ),
+                  ),
                 detail(
                   'Unallocated received credit',
                   money(ts.fold(0, (sum, t) => sum + store.creditFor(t))),
                 ),
                 detail(
-                  'Open repairs / account queries',
+                  'Open reports / account queries',
                   '${store.caseRecords.where((r) => ['repair', 'query'].contains(r['kind']) && store.research.caseStatus(r) != 'resolved').length}',
                 ),
                 if (owner) ...[
@@ -347,12 +361,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
                 if (owner)
                   action(
+                    'Tenant reports',
+                    () => open(context, const ReportsOverview()),
+                    icon: Icons.report_outlined,
+                  ),
+                if (owner)
+                  action(
                     'Add tenant record',
                     () => createTenantRecord(context),
                   ),
                 if (!owner && first != null)
                   action(
-                    'Repairs and account queries',
+                    'Report a problem / account query',
                     () => open(
                       context,
                       RentalRecordsScreen(tenancyId: first.id, kind: 'repair'),

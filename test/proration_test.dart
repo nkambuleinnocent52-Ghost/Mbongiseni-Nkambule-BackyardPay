@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/store.dart';
+
 import 'test_storage.dart';
+
 import 'package:mbongiseni_nkambule_apt_application/data/research_ledger.dart';
 import 'package:mbongiseni_nkambule_apt_application/models/models.dart';
 
@@ -59,10 +61,24 @@ void main() {
     });
     expect(ledger.charge(old, '2026-01'), 149000);
   });
- test('first charge due date cannot precede actual move-in',(){
- final store=AppStore(MemoryStorage())..researchVersion=2;
- const t=Tenancy(id:'t',userId:'u',propertyId:'p',room:'1',startPeriod:'2026-01',rentCents:150000,dueDay:1,record:{'firstMonthProration':'actual_days','tenancyStartedOn':'2026-01-15'},ledgerVersion:2);
- expect(store.dueDate(t,'2026-01'),DateTime(2026,1,15));expect(store.dueDate(t,'2026-02'),DateTime(2026,2,1));store.dispose();
- });
-
+  test('first charge due date cannot precede actual move-in', () {
+    final store = AppStore(MemoryStorage())..researchVersion = 2;
+    const t = Tenancy(
+      id: 't',
+      userId: 'u',
+      propertyId: 'p',
+      room: '1',
+      startPeriod: '2026-01',
+      rentCents: 150000,
+      dueDay: 1,
+      record: {
+        'firstMonthProration': 'actual_days',
+        'tenancyStartedOn': '2026-01-15',
+      },
+      ledgerVersion: 2,
+    );
+    expect(store.dueDate(t, '2026-01'), DateTime(2026, 1, 15));
+    expect(store.dueDate(t, '2026-02'), DateTime(2026, 2, 1));
+    store.dispose();
+  });
 }

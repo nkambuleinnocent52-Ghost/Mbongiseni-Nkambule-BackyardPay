@@ -9,7 +9,8 @@ import 'common.dart';
 
 class RentalDocuments extends StatefulWidget {
   final String tenancyId;
-  const RentalDocuments({super.key, required this.tenancyId});
+  final String? caseId;
+  const RentalDocuments({super.key, required this.tenancyId, this.caseId});
   @override
   State<RentalDocuments> createState() => _RentalDocumentsState();
 }
@@ -24,7 +25,10 @@ class _RentalDocumentsState extends State<RentalDocuments> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (records == null && !busy) load();
+    if (records == null && !busy) {
+      if (widget.caseId != null) category = 'Other';
+      load();
+    }
   }
 
   @override
@@ -36,11 +40,12 @@ class _RentalDocumentsState extends State<RentalDocuments> {
   Future<void> load() async {
     busy = true;
     try {
-      final rows = await client
+      var query = client
           .from('bp_documents')
           .select()
-          .eq('tenancy_id', widget.tenancyId)
-          .order('created_at', ascending: false);
+          .eq('tenancy_id', widget.tenancyId);
+      if (widget.caseId != null) query = query.eq('case_id', widget.caseId!);
+      final rows = await query.order('created_at', ascending: false);
       if (mounted)
         setState(() {
           records = rows;
@@ -94,12 +99,15 @@ class _RentalDocumentsState extends State<RentalDocuments> {
             fileOptions: FileOptions(contentType: mime, upsert: false),
           );
       await client.rpc(
-        'bp_register_document',
+        widget.caseId == null
+            ? 'bp_register_document'
+            : 'bp_register_case_document',
         params: {
           'tid': widget.tenancyId,
           'path': path,
           'label': title.text.trim(),
           'category_name': category,
+          if (widget.caseId != null) 'report_id': widget.caseId,
         },
       );
       registered = true;
@@ -119,7 +127,9 @@ class _RentalDocumentsState extends State<RentalDocuments> {
 
   @override
   Widget build(BuildContext context) => PageShell(
-    title: 'Rental documents',
+    title: widget.caseId == null
+        ? 'Rental documents'
+        : 'Report photos / evidence',
     maxWidth: 800,
     children: [
       const Text(

@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const crypto=require('node:crypto');
 const dir=process.env.EVIDENCE_DIR || '/tmp/backyardpay-cloud-evidence';fs.mkdirSync(dir,{recursive:true});
-const users=[], properties=[], tenancies=[], payments=[], notices=[];
+const users=[], properties=[], tenancies=[], payments=[], notices=[], cases=[];
 const now=()=>new Date().toISOString();
 const jwt=u=>`${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')}.test-only`;
 const session=u=>({access_token:jwt(u),refresh_token:u.id,token_type:'bearer',expires_in:3600,user:{id:u.id,email:u.email,role:'authenticated',aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:now()}});
@@ -14,7 +14,7 @@ const snapshot=u=>{
  const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
  const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
  const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
- return {version:1,researchVersion:2,prorationVersion:1,rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:[],session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+ return {version:1,researchVersion:2,prorationVersion:1,depositReportsVersion:1,rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
 };
 let browser;
 let recoveryEmail;
@@ -30,7 +30,7 @@ let recoveryEmail;
     const u={id:crypto.randomUUID(),email:body.email,password:body.password,...body.data,salt:'',passwordHash:''};users.push(u);
     if(u.role==='tenant'){
      const p=properties.find(p=>p.code===u.code);assert(p);assert(!tenancies.some(t=>t.propertyId===p.id&&t.room===u.room));
-     tenancies.push({id:crypto.randomUUID(),userId:u.id,propertyId:p.id,room:u.room,startPeriod:now().slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay,ledgerVersion:2,record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:now().slice(0,10)}});
+     tenancies.push({id:crypto.randomUUID(),userId:u.id,propertyId:p.id,room:u.room,startPeriod:now().slice(0,7),rentCents:p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:now().slice(0,10)}});
     }
     return reply(session(u));
    }
@@ -53,6 +53,7 @@ let recoveryEmail;
     } else if(body.operation==='review'){
      const p=payments.find(p=>p.id===a.id);assert(p);result=p.id;p.state=a.confirm?'confirmed':'rejected';p.reviewedAt=now();if(a.allocations)p.allocations=a.allocations;p.receiptDetails={tenant:'Tenant Test',landlord:'Owner Test',landlordAddress:'1 Owner Street',property:'My Real Rooms',address:'1 Test Street, Southernwood, East London, 5201',room:'1',issuedAllocations:p.allocations,issuedCreditCents:0};
      const t=tenancies.find(t=>t.id===p.tenancyId);notices.push({id:crypto.randomUUID(),userId:t.userId,title:'Payment confirmed',message:'Receipt available',createdAt:now(),read:false});
+    } else if(body.operation==='case'){result=a.eventId;cases.push({id:result,tenancyId:a.tenancyId,kind:a.kind,body:{...a.body,...(['repair','query'].includes(a.kind)?{status:'open'}:{})},actor:u.id,createdAt:now()});
     } else throw Error('Unexpected command: '+body.operation);
     return reply({result});
    }
@@ -80,7 +81,7 @@ let recoveryEmail;
  };
  const owner=await make();assert(!((await owner.locator('body').innerText()).toLowerCase().includes('demo')));
  await register(owner,'LANDLORD','owner@contract.test');await button(owner,'My properties');await button(owner,'Add property');
- for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2']])await fill(owner,name,value);
+ for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2'],['Security deposit per new tenancy (rand; 0 if none)','2000']])await fill(owner,name,value);
  await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();await button(owner,'Back');
  const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');
  const today=new Date(),monthDays=new Date(today.getUTCFullYear(),today.getUTCMonth()+1,0).getUTCDate();const firstCents=Math.round(150000*(monthDays-today.getUTCDate()+1)/monthDays);const paymentLabel=`Tenant Test • R ${(firstCents/100).toFixed(2)}`;
@@ -96,7 +97,16 @@ let recoveryEmail;
  await tenant.setViewportSize({width:390,height:844});await tenant.screenshot({path:dir+'/tenant-phone.png'});await tenant.setViewportSize({width:1440,height:1000});
  await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
  assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'));
- await button(tenant,'Profile');await button(tenant,'Logout');await button(tenant,'GET STARTED');await button(tenant,'TENANT');await button(tenant,'Forgot password?');
+ await button(tenant,'Report a problem / account query');await button(tenant,'Report a problem / query');
+ await fill(tenant,'Where exactly? Room / shared area / outside','Outside shared tap');await fill(tenant,'Describe the problem and immediate impact','Water is leaking continuously from the shared tap. Please arrange an inspection.');await button(tenant,'Save record');
+ await button(tenant,'Open case / add message');await tenant.getByText('Water / plumbing',{exact:true}).first().waitFor();
+ await button(owner,'Back to dashboard');await button(owner,'Refresh records');await button(owner,'Tenant reports');await button(owner,'Open report');
+ await owner.getByText('Water is leaking continuously from the shared tap. Please arrange an inspection.',{exact:true}).waitFor();
+ await button(owner,'Mark in progress');await fill(owner,'Message / explanation','Plumber contacted; agreeing access with the tenant.');await button(owner,'Save');
+ assert(cases.some(r=>r.kind==='case_update'&&r.body.status==='in_progress'));
+ assert.equal(tenancies[0].depositCents,200000);assert.equal(payments.length,1,'Report created no payment');
+ await owner.screenshot({path:dir+'/report-followup.png'});
+ await button(tenant,'Back');await button(tenant,'Back');await button(tenant,'Profile');await button(tenant,'Logout');await button(tenant,'GET STARTED');await button(tenant,'TENANT');await button(tenant,'Forgot password?');
  await fill(tenant,'Email','tenant@contract.test');await button(tenant,'Send reset link');
  assert.equal(recoveryEmail,'tenant@contract.test');
  await tenant.goto((process.env.APP_URL||'http://127.0.0.1:8080/')+'?code=test-only-recovery');

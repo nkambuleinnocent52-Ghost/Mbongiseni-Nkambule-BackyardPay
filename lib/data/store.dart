@@ -536,6 +536,7 @@ class AppStore extends ChangeNotifier {
     String city = '',
     String postalCode = '',
     bool prorateFirstMonth = true,
+    int? securityDepositCents,
   }) async {
     if (cloud != null)
       return await _remote('property', {
@@ -549,6 +550,8 @@ class AppStore extends ChangeNotifier {
         'city': city.trim(),
         'postalCode': postalCode.trim(),
         'prorateFirstMonth': prorateFirstMonth,
+        if (securityDepositCents != null)
+          'securityDepositCents': securityDepositCents,
       }) as String;
     final a = _user(Role.landlord);
     if (name.trim().length < 2 ||
@@ -584,6 +587,7 @@ class AppStore extends ChangeNotifier {
         code: old?.code ?? 'BP-${_uuid.v4().substring(0, 8).toUpperCase()}',
         rooms: rooms,
         prorateFirstMonth: prorateFirstMonth,
+        securityDepositCents: securityDepositCents ?? old?.securityDepositCents,
         rentCents: rentCents,
         dueDay: dueDay,
         latitude: old?.latitude,

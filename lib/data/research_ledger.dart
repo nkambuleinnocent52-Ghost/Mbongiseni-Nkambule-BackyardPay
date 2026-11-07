@@ -44,6 +44,9 @@ class ResearchLedger {
   int depositReceived(Tenancy t) => forTenancy(t.id, 'deposit')
       .where((r) => ['received', 'opening'].contains(r['body']['event']))
       .fold(0, (sum, r) => sum + (r['body']['amountCents'] as int));
+  int? depositOutstanding(Tenancy t) => t.depositCents == null
+      ? null
+      : (t.depositCents! - depositReceived(t)).clamp(0, 2147483647);
   int depositBalance(Tenancy t) => forTenancy(t.id, 'deposit').fold(
     0,
     (sum, r) =>

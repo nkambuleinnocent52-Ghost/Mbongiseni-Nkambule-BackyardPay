@@ -15,6 +15,10 @@ class CloudGateway {
       throw StateError(
         'Run BackyardPay-Proration-Update.sql in Supabase before using this update. Existing rental balances have been preserved.',
       );
+    if (data['depositReportsVersion'] != 1)
+      throw StateError(
+        'Run BackyardPay-Deposit-Reports-Update.sql before using this version. Existing records are preserved.',
+      );
     return data;
   }
 
@@ -42,6 +46,7 @@ class CloudGateway {
     'version': 1,
     'researchVersion': 2,
     'prorationVersion': 1,
+    'depositReportsVersion': 1,
     'rentTerms': [],
     'caseRecords': [],
     'session': null,

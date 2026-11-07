@@ -72,6 +72,7 @@ class RentalProperty {
   ].where((s) => s.trim().isNotEmpty).join(', ');
   final int rooms, rentCents, dueDay;
   final bool prorateFirstMonth;
+  final int? securityDepositCents;
   final double? latitude, longitude;
   const RentalProperty({
     required this.id,
@@ -85,6 +86,7 @@ class RentalProperty {
     this.latitude,
     this.longitude,
     this.prorateFirstMonth = true,
+    this.securityDepositCents,
     this.suburb = '',
     this.city = '',
     this.postalCode = '',
@@ -99,6 +101,7 @@ class RentalProperty {
     postalCode: j['postalCode'] ?? '',
     code: j['code'],
     prorateFirstMonth: j['prorateFirstMonth'] ?? false,
+    securityDepositCents: j['securityDepositCents'],
     rooms: j['rooms'],
     rentCents: j['rentCents'],
     dueDay: j['dueDay'],
@@ -115,6 +118,7 @@ class RentalProperty {
     'postalCode': postalCode,
     'code': code,
     'prorateFirstMonth': prorateFirstMonth,
+    'securityDepositCents': securityDepositCents,
     'rooms': rooms,
     'rentCents': rentCents,
     'dueDay': dueDay,
@@ -364,3 +368,6 @@ class MonthlyAccount {
       ? 'Partially paid'
       : 'Outstanding';
 }
+
+int parseDeposit(String text) =>
+    RegExp(r'^0(?:\.0{1,2})?$').hasMatch(text.trim()) ? 0 : parseMoney(text);

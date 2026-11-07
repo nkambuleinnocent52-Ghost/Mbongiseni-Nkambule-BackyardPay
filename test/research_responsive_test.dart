@@ -20,7 +20,13 @@ void main() {
     store.researchVersion = 2;
   });
   tearDown(() => store.dispose());
-  for (final name in ['payment', 'deposit', 'inspection', 'account']) {
+  for (final name in [
+    'payment',
+    'deposit',
+    'inspection',
+    'account',
+    'repair',
+  ]) {
     testWidgets('research $name form fits a 320 pixel phone', (tester) async {
       tester.view.physicalSize = const Size(320, 780);
       tester.view.devicePixelRatio = 1;
@@ -70,7 +76,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('start')), '2026-01-15');
     await tester.pumpAndSettle();
-    expect(find.textContaining('R 822.58'), findsOneWidget);
+    expect(find.textContaining('R 822.58'), findsNWidgets(2));
+    expect(find.textContaining('R 2822.58'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

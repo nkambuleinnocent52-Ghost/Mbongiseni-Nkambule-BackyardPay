@@ -179,6 +179,16 @@ Future<Uint8List> accountStatementPdf(AppStore store, String tenancyId) async {
         ),
         _row('Landlord', store.landlordFor(t).name),
         _row('Account begins', t.startPeriod),
+        _row(
+          'Agreed security deposit',
+          t.depositCents == null ? 'Not recorded' : money(t.depositCents!),
+        ),
+        _row(
+          'Deposit still due (separate from rent)',
+          store.research.depositOutstanding(t) == null
+              ? 'Not recorded'
+              : money(store.research.depositOutstanding(t)!),
+        ),
         if (t.record['firstMonthProration'] != null)
           pw.Text(
             firstChargeExplanation(
@@ -224,6 +234,7 @@ Future<Uint8List> accountStatementPdf(AppStore store, String tenancyId) async {
           money(rows.isEmpty ? 0 : rows.last.closingBalanceCents),
         ),
         if (store.researchReady) ...[
+          if(store.research.depositOutstanding(t)!=null) _row('Total recorded rent + deposit due',money((rows.isEmpty?0:rows.last.closingBalanceCents)+store.research.depositOutstanding(t)!)),
           _row('Unallocated received credit', money(store.creditFor(t))),
           _row('Tenant reports awaiting review', money(store.pendingFor(t))),
           _row(

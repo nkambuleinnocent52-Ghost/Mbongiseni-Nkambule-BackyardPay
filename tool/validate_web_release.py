@@ -45,7 +45,7 @@ def validate(files):
     assert b'onEntrypointLoaded: async' in files['flutter_bootstrap.js']
     assert b'Cache-Control: no-cache' in files['_headers']
     assert files['_redirects'].strip()==b'/* /index.html 200'
-    version=json.loads(files['version.json']);assert version['version']=='1.0.2' and version['build_number']=='3'
+    version=json.loads(files['version.json']);assert version['version']=='1.0.3' and version['build_number']=='4'
     return {name:hashlib.sha256(data).hexdigest() for name,data in sorted(files.items())}
 
 def from_directory(root):

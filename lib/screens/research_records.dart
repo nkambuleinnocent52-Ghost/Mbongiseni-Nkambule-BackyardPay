@@ -1,3 +1,4 @@
+import 'documents.dart';
 import '../data/research_ledger.dart';
 
 import 'dart:math' as math;
@@ -56,65 +57,111 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
           onChanged: (v) => setState(() => propertyId = v),
         ),
         gap(16),
+        if (store.isCloud &&
+            store.property(propertyId!).securityDepositCents == null)
+          const Text(
+            'Specify this property’s security deposit in Properties before onboarding (enter 0 if none).',
+          ),
         action(
           'Enter tenant details',
-          () => open(
-            context,
-            EditorPage(
-              title: 'Tenant and room',
-              preview: (context, v) {
-                try {
-                  final date = checkedDate(v['start']!);
-                  final property = store.property(propertyId!);
-                  return panel(
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        heading('First rental charge'),
-                        Text(
-                          firstChargeExplanation(
-                            property.rentCents,
-                            date,
-                            property.prorateFirstMonth,
+          store.isCloud &&
+                  store.property(propertyId!).securityDepositCents == null
+              ? null
+              : () => open(
+                  context,
+                  EditorPage(
+                    title: 'Tenant and room',
+                    preview: (context, v) {
+                      try {
+                        final date = checkedDate(v['start']!);
+                        final property = store.property(propertyId!);
+                        return panel(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              heading('Move-in costs'),
+                              detail(
+                                'Security deposit',
+                                property.securityDepositCents == null
+                                    ? 'Not specified — edit property first'
+                                    : money(property.securityDepositCents!),
+                              ),
+                              detail(
+                                'First rent charge',
+                                money(
+                                  property.prorateFirstMonth
+                                      ? proratedFirstCharge(
+                                          property.rentCents,
+                                          date,
+                                        )
+                                      : property.rentCents,
+                                ),
+                              ),
+                              if (property.securityDepositCents != null)
+                                detail(
+                                  'Total initially due',
+                                  money(
+                                    property.securityDepositCents! +
+                                        (property.prorateFirstMonth
+                                            ? proratedFirstCharge(
+                                                property.rentCents,
+                                                date,
+                                              )
+                                            : property.rentCents),
+                                  ),
+                                ),
+                              Text(
+                                firstChargeExplanation(
+                                  property.rentCents,
+                                  date,
+                                  property.prorateFirstMonth,
+                                ),
+                              ),
+                              const Text(
+                                'Confirm this move-in date and billing basis with the tenant. The deposit is separate.',
+                              ),
+                            ],
                           ),
-                        ),
-                        const Text(
-                          'Confirm this move-in date and billing basis with the tenant. The deposit is separate.',
-                        ),
-                      ],
-                    ),
-                  );
-                } catch (_) {
-                  return const Text(
-                    'Enter a valid move-in date to calculate the first charge.',
-                  );
-                }
-              },
-              help: 'Record only necessary contact information. This does not verify ownership or create a signed lease.',
-              fields: [
-                const FieldSpec('name', 'Tenant full name'),
-                const FieldSpec('phone', 'Phone (optional)', optional: true),
-                const FieldSpec('email', 'Email (optional)', optional: true),
-                const FieldSpec('room', 'Room number', numeric: true),
-                FieldSpec(
-                  'start',
-                  'Actual occupancy start (YYYY-MM-DD)',
-                  initial: isoDay(DateTime.now()),
+                        );
+                      } catch (_) {
+                        return const Text(
+                          'Enter a valid move-in date to calculate the first charge.',
+                        );
+                      }
+                    },
+                    help: 'Record only necessary contact information. This does not verify ownership or create a signed lease.',
+                    fields: [
+                      const FieldSpec('name', 'Tenant full name'),
+                      const FieldSpec(
+                        'phone',
+                        'Phone (optional)',
+                        optional: true,
+                      ),
+                      const FieldSpec(
+                        'email',
+                        'Email (optional)',
+                        optional: true,
+                      ),
+                      const FieldSpec('room', 'Room number', numeric: true),
+                      FieldSpec(
+                        'start',
+                        'Actual occupancy start (YYYY-MM-DD)',
+                        initial: isoDay(DateTime.now()),
+                      ),
+                    ],
+                    save: (v) async {
+                      checkedDate(v['start']!);
+                      await store.researchAction('tenancy', {
+                        'propertyId': propertyId,
+                        'name': v['name'],
+                        'phone': v['phone'],
+                        'email': v['email'],
+                        'room': int.tryParse(v['room']!) ?? 0,
+                        'start': v['start'],
+                      });
+                    },
+                  ),
                 ),
-              ],
-              save: (v) async {
-                checkedDate(v['start']!);
-                await store.researchAction('tenancy', {
-                  'propertyId': propertyId,
-                  'name': v['name'],
-                  'phone': v['phone'],
-                  'email': v['email'],
-                  'room': int.tryParse(v['room']!) ?? 0,
-                  'start': v['start'],
-                });
-              },
-            ),
-          ),
         ),
       ],
     );
@@ -131,7 +178,7 @@ class RentalRecordsScreen extends StatelessWidget {
   String get title => {
     'deposit': 'Deposit account',
     'inspection': 'Inspections and defects',
-    'repair': 'Repairs and queries',
+    'repair': 'Reports and queries',
     'adjustment': 'Charge adjustments',
     'audit': 'Rental change history',
   }[kind]!;
@@ -203,11 +250,11 @@ class RentalRecordsScreen extends StatelessWidget {
           ),
         if (kind == 'repair')
           const Text(
-            'Both parties can report repairs or query the account and add messages. Only the landlord changes workflow status. In-app status does not decide a legal dispute. For emergencies use local emergency services.',
+            'Report leaks, gates, safety concerns, noise or room damage, including damage you may have caused. Describe facts without assuming blame. Only this rental’s landlord and linked tenant can read the report. App reports are not monitored emergency calls; contact emergency/municipal services and the landlord directly for immediate danger.',
           ),
         if (kind != 'audit' && (owner || kind == 'repair'))
           action(
-            kind == 'repair' ? 'Report repair / account query' : 'Add record',
+            kind == 'repair' ? 'Report a problem / query' : 'Add record',
             () => open(context, RecordEditor(tenancyId: t.id, kind: kind)),
           ),
         gap(16),
@@ -230,7 +277,7 @@ class RentalRecordsScreen extends StatelessWidget {
                       ),
                     ),
                     if (['repair', 'query'].contains(row['kind']))
-                      StatusPill(store.research.caseStatus(row)),
+                      StatusPill(_caseStatusLabel(store.research.caseStatus(row))),
                   ],
                 ),
                 gap(8),
@@ -297,11 +344,18 @@ String _fieldLabel(String key) =>
       'period': 'Rental month',
       'reason': 'Agreement / reason',
       'payer': 'Actual payer',
+      'category': 'Category',
+      'urgency': 'Urgency',
+      'incidentDate': 'Date noticed',
+      'location': 'Location',
+      'cause': 'Reporter’s account of cause',
+      'accessAvailability': 'Proposed access availability',
       'method': 'Method',
       'action': 'Action',
       'keysMeters': 'Keys / meters / facilities',
     }[key] ??
     key;
+String _caseStatusLabel(String status) => const {'in_progress':'In progress','resolved':'Resolved','open':'Open','comment':'Message'}[status] ?? status;
 String _recordTitle(Map<String, dynamic> r) => r['kind'] == 'deposit'
     ? 'Deposit • ${r['body']['event']}'
     : r['kind'] == 'inspection'
@@ -312,7 +366,7 @@ String _recordTitle(Map<String, dynamic> r) => r['kind'] == 'deposit'
     ? 'Rental charge adjustment'
     : r['kind'] == 'audit'
     ? 'Recorded change'
-    : '${r['kind'] == 'repair' ? 'Repair' : 'Account query'}';
+    : '${r['body']['category'] ?? (r['kind'] == 'repair' ? 'Maintenance report' : 'Account query')}';
 
 class CaseThreadScreen extends StatelessWidget {
   final String tenancyId;
@@ -330,12 +384,34 @@ class CaseThreadScreen extends StatelessWidget {
         .forTenancy(tenancyId, 'case_update')
         .where((r) => r['body']['parentId'] == record['id']);
     return PageShell(
-      title: 'Repair / account query',
+      title: 'Report / account query',
       children: [
         heading(_recordTitle(record)),
-        StatusPill(store.research.caseStatus(record)),
+        StatusPill(_caseStatusLabel(store.research.caseStatus(record))),
         gap(12),
+        for (final key in [
+          'category',
+          'urgency',
+          'incidentDate',
+          'location',
+          'cause',
+          'accessAvailability',
+        ])
+          if (record['body'][key] != null)
+            detail(_fieldLabel(key), record['body'][key].toString()),
         Text(record['body']['description']),
+        const Text(
+          'Reported cause is the reporter’s account, not a decision about liability. A report does not change rent, take money from a deposit or authorise entry. Arrange access separately.',
+        ),
+        if (store.isCloud)
+          action(
+            'Report photos / evidence',
+            () => open(
+              context,
+              RentalDocuments(tenancyId: tenancyId, caseId: record['id']),
+            ),
+            icon: Icons.attach_file,
+          ),
         for (final reply in replies)
           panel(
             Column(
@@ -344,7 +420,7 @@ class CaseThreadScreen extends StatelessWidget {
                 Text(reply['body']['message']),
                 gap(8),
                 Text(
-                  '${reply['createdAt']} • ${reply['body']['status']}',
+                  '${DateTime.parse(reply['createdAt']).toLocal().toString().split('.').first} • ${_caseStatusLabel(reply['body']['status'])}',
                   style: const TextStyle(color: Palette.muted),
                 ),
               ],
@@ -405,6 +481,10 @@ class _RecordEditorState extends State<RecordEditor> {
       issue = 'repair',
       sign = 'Credit',
       method = 'Cash';
+  String category = 'Water / plumbing',
+      urgency = 'Routine',
+      location = 'Inside my room',
+      cause = 'Unknown';
   bool busy = false, checked = false;
   String? error;
   TextEditingController c(String key, [String initial = '']) =>
@@ -439,6 +519,7 @@ class _RecordEditorState extends State<RecordEditor> {
   ) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: DropdownButtonFormField<String>(
+      isExpanded: true,
       initialValue: value,
       decoration: InputDecoration(labelText: label),
       items: values
@@ -493,7 +574,16 @@ class _RecordEditorState extends State<RecordEditor> {
         });
       } else {
         kind = issue;
-        body['description'] = c('description').text;
+        checkedDate(c('incidentDate').text);
+        body.addAll({
+          'description': c('description').text,
+          'category': category,
+          'urgency': urgency,
+          'location': c('location', location).text,
+          'incidentDate': c('incidentDate').text,
+          'cause': cause,
+          'accessAvailability': c('access').text,
+        });
       }
       await StoreScope.of(context).researchAction('case', {
         'tenancyId': widget.tenancyId,
@@ -522,6 +612,9 @@ class _RecordEditorState extends State<RecordEditor> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (widget.kind == 'deposit') ...[
+                const Text(
+                  'For a transfer covering rent and deposit, enter only the deposit portion here. Use the actual shared bank reference so the two purposes can be reconciled without counting the full transfer twice.',
+                ),
                 choice('Deposit event', event, [
                   'received',
                   'interest',
@@ -533,7 +626,16 @@ class _RecordEditorState extends State<RecordEditor> {
                   'Actual event date (YYYY-MM-DD)',
                   initial: isoDay(DateTime.now()),
                 ),
-                field('amount', 'Amount (rand)'),
+                field(
+                  'amount',
+                  event == 'deduction'
+                      ? 'Supported deduction amount (rand)'
+                      : 'Amount (rand)',
+                ),
+                if (event == 'deduction')
+                  const Text(
+                    'Enter only the supported lawful deduction, not the entire deposit automatically. The remaining deposit and interest stay available for reconciliation.',
+                  ),
                 choice('Method / source', method, [
                   'Cash',
                   'Cash deposit',
@@ -611,9 +713,51 @@ class _RecordEditorState extends State<RecordEditor> {
                   'repair',
                   'query',
                 ], (v) => issue = v),
+                choice('Category', category, [
+                  'Water / plumbing',
+                  'Gate / shared facilities',
+                  'Electrical / safety',
+                  'Structure / damp',
+                  'Noise / nuisance',
+                  'Damage inside my room',
+                  'Account / deposit query',
+                  'Other',
+                ], (v) => category = v),
+                choice('Urgency', urgency, [
+                  'Routine',
+                  'Urgent',
+                  'Immediate danger',
+                ], (v) => urgency = v),
+                if (urgency != 'Routine')
+                  const Text(
+                    'For immediate danger or ongoing serious damage, contact the landlord and relevant emergency/municipal service directly. Do not wait for an in-app reply or attempt dangerous repairs.',
+                  ),
+                field(
+                  'incidentDate',
+                  'Date noticed (YYYY-MM-DD)',
+                  initial: isoDay(DateTime.now()),
+                ),
+                field(
+                  'location',
+                  'Where exactly? Room / shared area / outside',
+                  initial: location,
+                ),
+                choice('What do you know about the cause?', cause, [
+                  'Unknown',
+                  'Wear / deterioration suspected',
+                  'I or my household caused it',
+                  'Third party suspected',
+                  'Other',
+                ], (v) => cause = v),
+                field(
+                  'access',
+                  'Availability for an agreed inspection (optional)',
+                  optional: true,
+                  multiline: true,
+                ),
                 field(
                   'description',
-                  'Describe the repair or account query',
+                  'Describe the problem and immediate impact',
                   multiline: true,
                 ),
               ],
@@ -696,4 +840,56 @@ void closeTenancy(BuildContext context, String tenancyId) {
       },
     ),
   );
+}
+
+class ReportsOverview extends StatelessWidget {
+  const ReportsOverview({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final reports =
+        store.caseRecords
+            .where((r) => ['repair', 'query'].contains(r['kind']))
+            .toList()
+          ..sort((a, b) {
+            final resolved =
+                (store.research.caseStatus(a) == 'resolved' ? 1 : 0).compareTo(
+                  store.research.caseStatus(b) == 'resolved' ? 1 : 0,
+                );
+            if (resolved != 0) return resolved;
+            return (b['createdAt'] as String).compareTo(
+              a['createdAt'] as String,
+            );
+          });
+    return PageShell(
+      title: 'Tenant reports',
+      children: [
+        const Text(
+          'Private reports from your linked rentals. Reporting does not assign repair liability, authorise entry or change any rent/deposit balance.',
+        ),
+        if (reports.isEmpty) panel(const Text('No reports yet.')),
+        for (final r in reports)
+          panel(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                heading(_recordTitle(r)),
+                Text(
+                  '${store.tenantAccount(store.tenancy(r['tenancyId'])).name} • ${store.property(store.tenancy(r['tenancyId']).propertyId).name} • Room ${store.tenancy(r['tenancyId']).room}',
+                ),
+                Text('Urgency: ${r['body']['urgency'] ?? 'Not recorded'}'),
+                StatusPill(_caseStatusLabel(store.research.caseStatus(r))),
+                action(
+                  'Open report',
+                  () => open(
+                    context,
+                    CaseThreadScreen(tenancyId: r['tenancyId'], record: r),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }

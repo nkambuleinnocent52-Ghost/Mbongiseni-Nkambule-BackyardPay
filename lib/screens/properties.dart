@@ -47,7 +47,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
     context,
     EditorPage(
       title: property == null ? 'Add property' : 'Edit property',
-      help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. No payment processing is performed.',
+      help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. Specify the agreed refundable security deposit (0 if none). It is separate from rent and due before occupation; a setting does not record money received. No payment processing is performed.',
       preview: (context, v) {
         try {
           final cents = parseMoney(v['rent']!);
@@ -96,6 +96,14 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
           options: const ['Prorate actual calendar days', 'Charge full month'],
         ),
         FieldSpec(
+          'deposit',
+          'Security deposit per new tenancy (rand; 0 if none)',
+          initial: property?.securityDepositCents == null
+              ? ''
+              : (property!.securityDepositCents! / 100).toStringAsFixed(2),
+          numeric: true,
+        ),
+        FieldSpec(
           'due',
           'Due day of month (1–28)',
           initial: '${property?.dueDay ?? 1}',
@@ -114,6 +122,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
           rentCents: parseMoney(v['rent']!),
           dueDay: int.tryParse(v['due']!) ?? 0,
           prorateFirstMonth: v['proration'] == 'Prorate actual calendar days',
+          securityDepositCents: parseDeposit(v['deposit']!),
         );
       },
     ),
@@ -212,6 +221,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
               detail('Occupied', '$occupied'),
               detail('Available', '${p.rooms - occupied}'),
               detail('Rent for new tenants', money(p.rentCents)),
+              detail(
+                'Security deposit for new tenants',
+                p.securityDepositCents == null
+                    ? 'Not specified — set before onboarding'
+                    : money(p.securityDepositCents!),
+              ),
               detail(
                 'First month billing',
                 p.prorateFirstMonth
