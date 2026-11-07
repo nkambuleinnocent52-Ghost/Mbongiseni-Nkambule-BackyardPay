@@ -1,5 +1,7 @@
 # BackyardPay
 
+> **Release hold — 7 November 2026:** Windows Defender flagged the research web ZIP. Keep that download quarantined and pause deployment pending file-specific review. [Investigation and independent scan results](docs/security/Release-detection-2026-11-07.md).
+
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
 ## Research-aligned update — 6 November 2026
