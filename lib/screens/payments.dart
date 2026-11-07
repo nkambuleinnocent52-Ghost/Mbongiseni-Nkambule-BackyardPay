@@ -106,7 +106,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
               if (method == 'EFT' || method == 'PayShap')
                 panel(
                   const Text(
-                    'Your bank proof records the transfer. The landlord’s rent acknowledgement confirms receipt and allocates it to your room and rental month. Keep both; BackyardPay does not replace the bank proof.',
+                    'Keep your bank proof of payment. The landlord’s receipt also shows your room and the rent month covered.',
                     style: TextStyle(color: Palette.goldLight, height: 1.8),
                   ),
                 ),
@@ -274,7 +274,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             ),
           ),
         const Text(
-          'Lists payments by received/submitted month or allocated rental month. Confirmed allocations and pending reports are separate; a missing app entry is not proof of nonpayment.',
+          'View payments by the month they were made or the rent month they cover. Payments waiting for confirmation are shown separately.',
         ),
       ],
     );
@@ -404,14 +404,16 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         heading(p.state.name.toUpperCase()),
         if (p.state == ReviewState.pending)
           panel(
-            const Text(
-              'Payment reported; awaiting landlord reconciliation. This is not a confirmed receipt, and pending status is not proof that no money reached the landlord.',
+            Text(
+              store.currentUser!.role == Role.landlord
+                ? 'The tenant reported this payment. Check your cash or bank records, then confirm the amount and rent months.'
+                : 'Payment reported. Your landlord still needs to check and confirm it. A receipt will be available after confirmation.',
             ),
           ),
         if (p.state == ReviewState.reversed)
           panel(
             Text(
-              'Received payment reversed: ${p.rejectionReason}. Original details are retained. Its allocations and credit no longer reduce the account balance.',
+              'Received payment reversed: ${p.rejectionReason}. The original record is kept, but this payment no longer reduces rent owed.',
             ),
           ),
         if (p.state == ReviewState.rejected)
@@ -424,15 +426,15 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
               detail('Property', property.name),
               detail('Room', t.room),
               if (!store.researchReady) detail('Rent month', p.period),
-              if (p.payer.isNotEmpty) detail('Actual payer', p.payer),
+              if (p.payer.isNotEmpty) detail('Person who paid', p.payer),
               if (store.researchReady) ...[
-                heading('Rental allocations'),
+                heading('Rent months covered'),
                 for (final a in p.splits)
-                  detail(a.period, money(a.amountCents)),
+                  detail(monthLabel(a.period), money(a.amountCents)),
                 detail(
                   p.state == ReviewState.confirmed
-                      ? 'Unallocated credit'
-                      : 'Proposed unallocated amount',
+                      ? 'Money not yet linked to a month'
+                      : 'Reported money not yet linked to a month',
                   money(p.creditCents),
                 ),
               ],
@@ -450,7 +452,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
                 if (p.method == 'EFT' || p.method == 'PayShap')
                   panel(
                     const Text(
-                      'The landlord’s receipt acknowledges the same money as your bank record and identifies its rental allocations. Keep both. This is not bank verification.',
+                      'This receipt records the landlord’s confirmation and shows which rent months are covered. Keep your bank proof too.',
                       style: TextStyle(color: Palette.goldLight, height: 1.8),
                     ),
                   ),
@@ -486,7 +488,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
               store.currentUser!.role == Role.landlord &&
               p.creditCents > 0)
             action(
-              'Allocate unallocated credit',
+              'Choose months for the remaining money',
               () => open(
                 context,
                 ResearchPaymentEntry(
@@ -523,7 +525,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
               context,
               EditorPage(
                 title: 'Record payment reversal',
-                help: 'Record only money actually returned/reversed or an evidenced erroneous received entry. This does not transfer money. The original record stays visible and its allocations stop reducing the balance. For a partial return, reconcile the full reversal and record the actual retained amount separately with linked references.',
+                help: 'Use this only when money was returned or a confirmed payment was recorded by mistake. It does not send money. The original record stays visible, but stops reducing rent owed. If only part was returned, record the full reversal and then record the amount you kept, using linked payment references.',
                 fields: const [
                   FieldSpec(
                     'reason',

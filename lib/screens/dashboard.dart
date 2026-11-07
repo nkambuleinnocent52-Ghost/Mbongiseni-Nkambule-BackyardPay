@@ -301,7 +301,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Recorded balances are based on confirmed allocations. A pending report is not proof of nonpayment. Review credit and account queries before drawing conclusions.',
+                  'Balances use payments the landlord has confirmed for each month. Check pending payments and any money not yet linked to a month before asking for more rent.',
                   style: TextStyle(color: Palette.muted, height: 1.7),
                 ),
                 if (!owner && ts.every((t) => t.endedOn != null))
@@ -339,7 +339,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                 detail(
-                  'Unallocated received credit',
+                  'Money received but not yet linked to a month',
                   money(ts.fold(0, (sum, t) => sum + store.creditFor(t))),
                 ),
                 detail(

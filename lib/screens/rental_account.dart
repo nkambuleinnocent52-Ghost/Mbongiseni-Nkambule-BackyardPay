@@ -48,7 +48,7 @@ class RentalAccountScreen extends StatelessWidget {
               ),
               gap(10),
               const Text(
-                'Confirmed-record charge balance before unallocated credit',
+                'Rent balance before applying money not yet linked to a month',
                 style: TextStyle(color: Palette.muted, fontSize: 12),
               ),
             ],
@@ -66,11 +66,11 @@ class RentalAccountScreen extends StatelessWidget {
               detail('Base rent', money(t.rentCents)),
               if (store.researchReady) ...[
                 detail(
-                  'Unallocated received credit',
+                  'Money received but not yet linked to a month',
                   money(store.creditFor(t)),
                 ),
                 detail(
-                  'Reports awaiting reconciliation',
+                  'Payments waiting for the landlord to check',
                   money(store.pendingFor(t)),
                 ),
               ],
@@ -80,7 +80,7 @@ class RentalAccountScreen extends StatelessWidget {
           ),
         ),
         const Text(
-          'This view allocates payments to charge months as of today. It is not historical month-end cash flow: a later payment can settle an earlier charge. The cumulative balance carries each charge once. Pending reports are separate and are not proof of nonpayment.',
+          'This account shows rent due and confirmed payments for each month. A payment made later can pay off an earlier month. Payments waiting for confirmation are shown separately.',
           style: TextStyle(color: Palette.muted, fontSize: 12, height: 1.8),
         ),
         gap(16),

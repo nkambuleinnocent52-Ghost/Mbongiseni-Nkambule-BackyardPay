@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dashboard.dart' show monthLabel;
 
 import 'package:flutter/material.dart';
 
@@ -96,7 +96,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
         if (cents == 0) continue;
         if (!seen.add(periods[i]))
           throw ArgumentError(
-            'Combine allocations for the same month into one row.',
+            'You selected the same month twice. Enter its total in one row.',
           );
         splits.add({'period': periods[i], 'amountCents': cents});
         sum += cents;
@@ -104,10 +104,12 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
       final p = widget.paymentId == null ? null : s.payment(widget.paymentId!);
       final limit = widget.credit ? p!.creditCents : parseMoney(amount.text);
       if (sum > limit)
-        throw ArgumentError('Allocations exceed the amount available.');
+        throw ArgumentError(
+          'The amounts entered for the months are more than the payment. Reduce them.',
+        );
       if (owner && !received)
         throw ArgumentError(
-          'Confirm you checked receipt of the money and this allocation.',
+          'Tick the box to confirm that you received the money and checked which months it covers.',
         );
       dynamic id;
       if (widget.credit) {
@@ -192,9 +194,9 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
     } catch (_) {}
     return PageShell(
       title: widget.credit
-          ? 'Allocate recorded credit'
+          ? 'Choose rent months'
           : p != null
-          ? 'Review money and allocation'
+          ? 'Check and confirm payment'
           : owner
           ? 'Record money received'
           : 'Report a payment',
@@ -203,10 +205,10 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
         panel(
           Text(
             widget.credit
-                ? 'This allocates money already received. It does not create a new payment or replace its original receipt.'
+                ? 'Choose which rent months this money covers. The money has already been received; this does not record another payment.'
                 : owner
-                ? 'Check the actual cash or beneficiary bank transaction. Record money already received, its actual payer and its allocations. This issues a landlord receipt; BackyardPay does not move or bank-verify money.'
-                : 'Pay through your usual bank or cash arrangement, then report the payment here. Your report awaits landlord reconciliation; it is not evidence that the landlord has not received the money.',
+                ? 'Use this after you receive cash or see the payment in your bank account. Check the amount and rent month before confirming. This app does not transfer money.'
+                : 'Already paid your landlord? Enter the payment here and choose the month it covers. Your landlord will check it and confirm. This app does not send money.',
           ),
         ),
         Form(
@@ -215,17 +217,19 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!widget.credit) ...[
-                field(amount, 'Amount (rand)', edit: p == null),
                 field(
-                  payer,
-                  'Actual payer (may differ from tenant)',
+                  amount,
+                  owner
+                      ? 'Amount received (rand)'
+                      : 'How much did you pay? (rand)',
                   edit: p == null,
                 ),
+                field(payer, 'Name of the person who paid', edit: p == null),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
                   initialValue: method,
                   decoration: const InputDecoration(
-                    labelText: 'Payment method',
+                    labelText: 'How was it paid?',
                   ),
                   items:
                       [
@@ -244,28 +248,28 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                       ? null
                       : (v) => setState(() => method = v!),
                 ),
-                field(
-                  date,
-                  'Actual payment date (YYYY-MM-DD)',
-                  edit: p == null,
-                ),
+                field(date, 'Date paid (YYYY-MM-DD)', edit: p == null),
                 if (!['Cash', 'Other'].contains(method))
                   field(
                     bank,
-                    'Bank transaction reference (not a PIN)',
+                    'Bank payment reference (from your banking app)',
                     edit: p == null,
                   ),
-                field(reference, 'Unique record reference', edit: p == null),
+                field(reference, 'Payment record number', edit: p == null),
               ] else
                 panel(
                   Text(
-                    'Unallocated credit available: ${money(p!.creditCents)}',
+                    'Money received but not yet linked to a month: ${money(p!.creditCents)}',
                   ),
                 ),
               gap(16),
-              heading('Allocate to rental charges'),
+              heading(
+                owner
+                    ? 'Which month does this payment cover?'
+                    : 'Which month did you pay for?',
+              ),
               const Text(
-                'One payment may cover several months. Any remainder stays as unallocated credit. Leave all allocations at zero if the purpose needs clarification. Deposits are recorded separately in the Security deposit section of rental details. If one bank transfer covers both, enter only its rent portion here and its deposit portion there, using the same actual bank transaction reference. Do not record the full transfer twice.',
+                'Choose the month and how much of this payment goes towards it. Paying for more than one month? Add another month below. Enter rent only here; record any security deposit separately in Rental details.',
               ),
               gap(12),
               for (var i = 0; i < periods.length; i++)
@@ -280,12 +284,14 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                           key: ValueKey('allocation-month-$i-${periods[i]}'),
                           initialValue: periods[i],
                           decoration: const InputDecoration(
-                            labelText: 'Rental month',
+                            labelText: 'Month paid for',
                           ),
                           items: months
                               .map(
-                                (m) =>
-                                    DropdownMenuItem(value: m, child: Text(m)),
+                                (m) => DropdownMenuItem(
+                                  value: m,
+                                  child: Text(monthLabel(m)),
+                                ),
                               )
                               .toList(),
                           onChanged: busy
@@ -302,7 +308,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                             decimal: true,
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Allocation ${i + 1} (rand)',
+                            labelText: 'Amount for this month (rand)',
                           ),
                           onChanged: (_) => setState(() {}),
                           validator: (v) {
@@ -316,7 +322,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Remove allocation ${i + 1}',
+                        tooltip: 'Remove ${monthLabel(periods[i])}',
                         onPressed: busy
                             ? null
                             : () => setState(() {
@@ -342,21 +348,27 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                           allocated.add(TextEditingController(text: '0.00'));
                         }),
                   icon: const Icon(Icons.add),
-                  label: const Text('Add another rental month'),
+                  label: const Text('Paying for another month? Add it'),
                 ),
               if (remaining != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    '${owner ? 'Remaining unallocated credit' : 'Proposed unallocated amount'}: ${money(math.max(0, remaining))}',
+                    remaining < 0
+                        ? 'The month amounts are more than the payment. Reduce them.'
+                        : remaining == 0
+                        ? 'All of this payment is linked to rent months. This does not mean all rent is paid.'
+                        : '${money(remaining)} of this payment is not yet linked to a month.',
                     style: const TextStyle(color: Palette.goldLight),
                   ),
                 ),
               field(
                 notes,
                 widget.credit
-                    ? 'Allocation explanation'
-                    : 'Notes / payment purpose (optional)',
+                    ? 'Explain which months this money is for'
+                    : owner
+                    ? 'Payment note (optional)'
+                    : 'Anything else to tell the landlord? (optional)',
                 optional: !widget.credit,
                 multiline: true,
               ),
@@ -365,7 +377,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                   value: received,
                   onChanged: busy ? null : (v) => setState(() => received = v!),
                   title: const Text(
-                    'I checked the money received and the allocation. This is my confirmation, not bank verification.',
+                    'I received this money and checked which rent months it covers.',
                   ),
                 ),
               if (error != null)
@@ -374,7 +386,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                 busy
                     ? 'Saving…'
                     : widget.credit
-                    ? 'Allocate existing credit'
+                    ? 'Save chosen months'
                     : p != null
                     ? 'Confirm received'
                     : owner
