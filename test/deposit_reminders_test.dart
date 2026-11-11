@@ -59,11 +59,13 @@ void main() {
   });
 
   test('new deadline metadata never adds another ten days to the deadline', () {
-    final t = rental(record: {
-      'tenancyStartedOn': '2026-11-01',
-      'depositDueOn': '2026-11-11',
-      'depositDeadlinePolicy': 'move_in_plus_10',
-    });
+    final t = rental(
+      record: {
+        'tenancyStartedOn': '2026-11-01',
+        'depositDueOn': '2026-11-11',
+        'depositDeadlinePolicy': 'move_in_plus_10',
+      },
+    );
     final info = status(tenancy: t)!;
     expect(info.dueOn, DateTime.utc(2026, 11, 11));
     expect(info.eligibleOn, info.dueOn);
@@ -71,12 +73,14 @@ void main() {
   });
 
   test('move-in policy overrides stale custom dates and leftover notes', () {
-    final t = rental(record: {
-      'tenancyStartedOn': '2026-11-01',
-      'depositDueOn': '2026-11-30',
-      'depositDueNote': 'Old note must not extend the new policy',
-      'depositDeadlinePolicy': 'move_in_plus_10',
-    });
+    final t = rental(
+      record: {
+        'tenancyStartedOn': '2026-11-01',
+        'depositDueOn': '2026-11-30',
+        'depositDueNote': 'Old note must not extend the new policy',
+        'depositDeadlinePolicy': 'move_in_plus_10',
+      },
+    );
     final info = status(tenancy: t)!;
     expect(info.dueOn, DateTime.utc(2026, 11, 11));
     expect(info.eligibleOn, info.dueOn);
@@ -84,11 +88,13 @@ void main() {
   });
 
   test('marked legacy agreement retains its date without requiring a note', () {
-    final t = rental(record: {
-      'tenancyStartedOn': '2026-11-01',
-      'depositDueOn': '2026-11-18',
-      'depositDeadlinePolicy': 'legacy_agreed',
-    });
+    final t = rental(
+      record: {
+        'tenancyStartedOn': '2026-11-01',
+        'depositDueOn': '2026-11-18',
+        'depositDeadlinePolicy': 'legacy_agreed',
+      },
+    );
     final info = status(tenancy: t)!;
     expect(info.dueOn, DateTime.utc(2026, 11, 18));
     expect(info.eligibleOn, info.dueOn);
@@ -96,10 +102,9 @@ void main() {
   });
 
   test('old automatic due dates without agreement use move-in plus ten', () {
-    final t = rental(record: {
-      'tenancyStartedOn': '2026-11-04',
-      'depositDueOn': '2026-11-04',
-    });
+    final t = rental(
+      record: {'tenancyStartedOn': '2026-11-04', 'depositDueOn': '2026-11-04'},
+    );
     final info = status(tenancy: t)!;
     expect(info.dueOn, DateTime.utc(2026, 11, 14));
     expect(info.eligibleOn, info.dueOn);
@@ -107,11 +112,13 @@ void main() {
   });
 
   test('an explicit legacy agreement remains due on its agreed date', () {
-    final t = rental(record: {
-      'tenancyStartedOn': '2026-11-01',
-      'depositDueOn': '2026-11-18',
-      'depositDueNote': 'Existing agreement to pay on 18 November',
-    });
+    final t = rental(
+      record: {
+        'tenancyStartedOn': '2026-11-01',
+        'depositDueOn': '2026-11-18',
+        'depositDueNote': 'Existing agreement to pay on 18 November',
+      },
+    );
     expect(status(tenancy: t)!.overdue, isFalse);
     expect(status(tenancy: t)!.daysSinceDue, -7);
     expect(status(tenancy: t)!.dueOn, DateTime.utc(2026, 11, 18));

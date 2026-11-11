@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/store.dart';
 import 'package:mbongiseni_nkambule_apt_application/models/models.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/common.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/deposit_reminder_notice.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/shared/common.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/payments/deposit_reminder_notice.dart';
 import 'package:mbongiseni_nkambule_apt_application/ui/design.dart';
 
 import 'fixtures.dart';
@@ -33,7 +33,11 @@ void main() {
       tenancy['record'] = {
         ...Map<String, dynamic>.from(tenancy['record'] ?? {}),
         'tenancyStartedOn': moveIn.toIso8601String().split('T').first,
-        'depositDueOn': moveIn.add(const Duration(days: 10)).toIso8601String().split('T').first,
+        'depositDueOn': moveIn
+            .add(const Duration(days: 10))
+            .toIso8601String()
+            .split('T')
+            .first,
         'depositDeadlinePolicy': 'move_in_plus_10',
       };
     }
@@ -71,7 +75,7 @@ void main() {
       final t = store.tenancies.first;
       await pump(tester, DepositReminderNotice(tenancyId: t.id));
       expect(find.text('Deposit reminder'), findsOneWidget);
-      expect(find.textContaining('R 2000.00 of your deposit'), findsOneWidget);
+      expect(find.textContaining('R 2000.00 overdue'), findsOneWidget);
       expect(find.text('Report a deposit payment'), findsOneWidget);
       expect(find.textContaining('evict'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -93,7 +97,7 @@ void main() {
       await pump(tester, DepositReminderNotice(tenancyId: t.id));
       expect(find.text('Deposit payment waiting for review'), findsOneWidget);
       expect(
-        find.textContaining('Do not pay that reported amount again'),
+        find.textContaining('Do not pay this amount again'),
         findsOneWidget,
       );
       expect(find.text('Report a deposit payment'), findsNothing);
@@ -180,7 +184,7 @@ void main() {
         DepositReminderSettings(tenancyId: store.tenancies.first.id),
       );
       expect(find.textContaining('Deposit deadline'), findsOneWidget);
-      expect(find.textContaining('Reminder from'), findsOneWidget);
+      expect(find.textContaining('10 calendar days'), findsOneWidget);
       expect(find.text('Save agreed due date'), findsNothing);
       expect(find.byType(TextFormField), findsNothing);
       expect(tester.takeException(), isNull);

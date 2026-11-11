@@ -29,8 +29,8 @@ The old sample app remains the deployed version until this upload is complete. T
 
 1. Choose Landlord → Create an account. Use an email address you can open, a strong password, your name and contact number.
 2. Confirm your email, then log in as Landlord.
-3. Create a property: address, room count, default rent and due day. Assign an available room to the tenant using Add tenant record, then share that rental’s private JOIN- invitation. Property codes cannot register tenant accounts.
-4. The tenant creates their own account using that code and an available room number, confirms their email and signs in as Tenant. Landlords should not collect tenants' passwords.
+3. Create a property: address, room count, default rent and deposit. Rent is due on the 1st. Assign an available room to the tenant using Add tenant record, then share that rental’s private JOIN- invitation. Property codes cannot register tenant accounts.
+4. The tenant creates their own account using that private invitation; their room is already assigned. The tenant confirms their email and signs in as Tenant. Landlords should not collect tenants' passwords.
 5. Complete Rental details as Landlord: dates, deposits, utilities, rules and contacts. The tenant can acknowledge reading those details.
 6. Tenant records a payment. The landlord checks actual receipt of the money before confirming. Both accounts then show the updated balance and the confirmed PDF.
 7. Accounts on separate browsers/devices share records. Active screens refresh every 20 seconds; the toolbar's Refresh records button loads changes immediately. Offline saves are not silently queued as successful.

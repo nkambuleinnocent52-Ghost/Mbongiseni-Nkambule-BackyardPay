@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/store.dart';
 import 'package:mbongiseni_nkambule_apt_application/models/models.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/common.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/simple_rentals.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/room_rents.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/shared/common.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/rentals/simple_rentals.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/properties/room_rents.dart';
 import 'package:mbongiseni_nkambule_apt_application/ui/design.dart';
 
 import 'fixtures.dart';

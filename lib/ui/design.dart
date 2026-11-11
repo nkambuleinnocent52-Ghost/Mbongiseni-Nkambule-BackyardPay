@@ -329,7 +329,7 @@ class MetricCard extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(color: Palette.muted, fontSize: 12),
+                style: const TextStyle(color: Palette.muted, fontSize: 14),
               ),
             ),
             Icon(icon, color: Palette.gold, size: 20),
@@ -354,7 +354,7 @@ class MetricCard extends StatelessWidget {
             caption,
             style: const TextStyle(
               color: Palette.muted,
-              fontSize: 11,
+              fontSize: 13,
               height: 1.5,
             ),
           ),

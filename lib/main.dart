@@ -7,8 +7,8 @@ import 'data/cloud_config.dart';
 import 'ui/design.dart';
 
 export 'app.dart' show BackyardPayApp, HomeGateway;
-export 'screens/auth.dart' show SplashScreen, UserTypeScreen;
-export 'screens/password_recovery.dart' show PasswordRecoveryScreen;
+export 'screens/auth/auth.dart' show SplashScreen, UserTypeScreen;
+export 'screens/auth/password_recovery.dart' show PasswordRecoveryScreen;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

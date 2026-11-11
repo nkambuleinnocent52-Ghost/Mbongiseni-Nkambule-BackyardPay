@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Latest release: 1.3.0, build 12.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.3.0.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
+> **Latest release: 1.4.0, build 13.** [Netlify web ZIP](downloads/BackyardPay-Netlify-web.zip) · [Editable source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and upload guide](docs/releases/1.4.0-simple-dashboards.md). Simpler role dashboards, phone navigation and feature folders. No additional SQL for an existing 1.3.0 installation.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -16,6 +16,8 @@ The black/gold design is retained. See the [research implementation audit](docs/
 - Separate stakeholder dashboards show relevant records, credit, attention items and actions. Location, optional active-browser alerts and in-app notifications remain.
 
 ## Activate the update
+
+**For 1.4.0:** Upload the rebuilt web ZIP to the existing Netlify project. [Design decisions from the supplied slides](docs/design/USABILITY-REVIEW.md) · [Source folder guide](docs/PROJECT-STRUCTURE.md).
 
 **For 1.2.1:** Apply [Deposit reminder SQL](downloads/BackyardPay-Deposit-Reminder-Update.sql), then upload the current web ZIP. Ten-day in-app deposit reminders with pending-payment checks and optional daily background scheduling. [Activation and scheduler status](docs/releases/Netlify-1.2.1.md).
 
@@ -99,4 +101,4 @@ Implementation uses Flutter/Dart, shared_preferences, cryptography, geolocator, 
 
 The website is not deployed by uploading these files to GitHub. Hosting and Android testing are separate steps.
 
-Version1.3.0 fixes the rules: rent on the1st; new tenant deposit once within10days of move-in, with no extra10-day reminder delay. Apply downloads/BackyardPay-Fixed-Payment-Rules.sql before the latest web ZIP.
+The preceding 1.3.0 database update enforces rent on the 1st and the one-off deposit within 10 days of move-in. If that update is already installed, 1.4.0 requires only the web upload.

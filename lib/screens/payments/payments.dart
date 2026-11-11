@@ -1,0 +1,553 @@
+import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
+
+import '../../models/models.dart';
+import '../../services/receipts.dart';
+import '../shared/common.dart';
+import '../shared/dashboard.dart';
+import 'payment_entry.dart';
+import '../../ui/design.dart';
+
+class PaymentFormScreen extends StatefulWidget {
+  final String tenancyId;
+  const PaymentFormScreen({super.key, required this.tenancyId});
+  @override
+  State<PaymentFormScreen> createState() => _PaymentFormScreenState();
+}
+
+class _PaymentFormScreenState extends State<PaymentFormScreen> {
+  final form = GlobalKey<FormState>();
+  final amount = TextEditingController(),
+      reference = TextEditingController(),
+      notes = TextEditingController(),
+      bankReference = TextEditingController();
+  String period = periodOf(DateTime.now()), method = 'Cash';
+  DateTime paidOn = DateTime.now();
+  bool initialized = false, busy = false;
+  String? error;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!initialized) {
+      final store = StoreScope.of(context), t = store.tenancy(widget.tenancyId);
+      amount.text = (store.outstanding(t, period) / 100).toStringAsFixed(2);
+      reference.text = store.newReference;
+      initialized = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    amount.dispose();
+    reference.dispose();
+    notes.dispose();
+    bankReference.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (!form.currentState!.validate()) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    final store = StoreScope.of(context);
+    try {
+      final id = await store.submitPayment(
+        tenancyId: widget.tenancyId,
+        period: period,
+        amountCents: parseMoney(amount.text),
+        method: method,
+        paidOn: paidOn,
+        reference: reference.text,
+        notes: notes.text,
+        bankReference: bankReference.text,
+      );
+      if (mounted && ModalRoute.of(context)?.isCurrent == true)
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentDetailsScreen(paymentId: id),
+          ),
+        );
+    } catch (e) {
+      if (mounted) setState(() => error = errorText(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context), t = store.tenancy(widget.tenancyId);
+    if (store.researchReady) return ResearchPaymentEntry(tenancyId: t.id);
+    final start = periodDate(t.startPeriod), now = DateTime.now();
+    final months = <String>[];
+    for (
+      var m = DateTime(start.year, start.month);
+      !m.isAfter(DateTime(now.year, now.month));
+      m = DateTime(m.year, m.month + 1)
+    ) {
+      months.add(periodOf(m));
+    }
+    return PageShell(
+      title: 'Record rent payment',
+      maxWidth: 740,
+      children: [
+        panel(
+          const Text(
+            'Pay your landlord first by cash or through your banking app. Then record the payment here. BackyardPay does not connect to your bank, initiate transfers or verify a bank balance. Your landlord matches the record to money received.',
+          ),
+        ),
+        Form(
+          key: form,
+          child: Column(
+            children: [
+              if (method == 'EFT' || method == 'PayShap')
+                panel(
+                  const Text(
+                    'Keep your bank proof of payment. The landlord’s receipt also shows your room and the rent month covered.',
+                    style: TextStyle(color: Palette.goldLight, height: 1.8),
+                  ),
+                ),
+              gap(),
+              DropdownButtonFormField<String>(
+                initialValue: period,
+                decoration: const InputDecoration(labelText: 'Rent month'),
+                items: months.reversed
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: busy ? null : (v) => setState(() => period = v!),
+              ),
+              gap(),
+              TextFormField(
+                key: const ValueKey('amount'),
+                controller: amount,
+                enabled: !busy,
+                decoration: const InputDecoration(labelText: 'Amount (rand)'),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                validator: (v) {
+                  try {
+                    parseMoney(v ?? '');
+                    return null;
+                  } catch (e) {
+                    return errorText(e);
+                  }
+                },
+              ),
+              gap(),
+              DropdownButtonFormField<String>(
+                initialValue: method,
+                decoration: const InputDecoration(labelText: 'Payment method'),
+                items: ['Cash', 'EFT', 'PayShap', 'Other']
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: busy ? null : (v) => setState(() => method = v!),
+              ),
+              gap(),
+              if (method == 'EFT' || method == 'PayShap') ...[
+                TextFormField(
+                  controller: bankReference,
+                  enabled: !busy,
+                  decoration: const InputDecoration(
+                    labelText: 'Bank / PayShap transaction reference',
+                    helperText: 'Use the reference on your bank confirmation, not a PIN or password.',
+                  ),
+                  validator: requiredField,
+                ),
+                gap(),
+              ],
+              ListTile(
+                title: Text(
+                  'Payment date: ${paidOn.toIso8601String().split('T').first}',
+                ),
+                trailing: const Icon(Icons.calendar_month),
+                onTap: busy
+                    ? null
+                    : () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: paidOn,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (date != null && mounted)
+                          setState(() => paidOn = date);
+                      },
+              ),
+              gap(),
+              TextFormField(
+                key: const ValueKey('reference'),
+                controller: reference,
+                enabled: !busy,
+                decoration: const InputDecoration(
+                  labelText: 'Unique payment reference',
+                ),
+                validator: requiredField,
+              ),
+              gap(),
+              TextFormField(
+                controller: notes,
+                enabled: !busy,
+                decoration: const InputDecoration(
+                  labelText: 'Notes (optional)',
+                ),
+                maxLines: 3,
+              ),
+              gap(),
+              if (error != null)
+                Text(
+                  error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              action(
+                busy ? 'Submitting…' : 'Submit payment',
+                busy ? null : submit,
+                icon: Icons.send_outlined,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class PaymentsScreen extends StatefulWidget {
+  final String? tenancyId;
+  final String? initialPeriod;
+  const PaymentsScreen({super.key, this.tenancyId, this.initialPeriod});
+  @override
+  State<PaymentsScreen> createState() => _PaymentsScreenState();
+}
+
+class _PaymentsScreenState extends State<PaymentsScreen> {
+  String filter = 'All';
+  late String period = widget.initialPeriod ?? periodOf(DateTime.now());
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final ps = store.payments
+        .where(
+          (p) =>
+              (p.period == period || p.splits.any((a) => a.period == period)) &&
+              (widget.tenancyId == null || p.tenancyId == widget.tenancyId) &&
+              (filter == 'All' || p.state.name == filter.toLowerCase()),
+        )
+        .toList();
+    return PageShell(
+      title: 'Payment records',
+      children: [
+        MonthSelector(
+          period: period,
+          onChanged: (v) => setState(() => period = v),
+        ),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final f in ['All', 'Pending', 'Confirmed', 'Rejected'])
+              ChoiceChip(
+                label: Text(f),
+                selected: filter == f,
+                onSelected: (_) => setState(() => filter = f),
+              ),
+          ],
+        ),
+        gap(),
+        if (ps.isEmpty)
+          panel(const Text('No payment records for these filters.')),
+        for (final p in ps)
+          panel(
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                '${store.tenantAccount(store.tenancy(p.tenancyId)).name} • ${money(p.amountCents)}',
+              ),
+              subtitle: Text(
+                '${p.period} • ${p.method} • ${p.state.name.toUpperCase()}\n${p.reference}',
+              ),
+              isThreeLine: true,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => open(context, PaymentDetailsScreen(paymentId: p.id)),
+            ),
+          ),
+        const Text(
+          'View payments by the month they were made or the rent month they cover. Payments waiting for confirmation are shown separately.',
+        ),
+      ],
+    );
+  }
+}
+
+class PaymentDetailsScreen extends StatefulWidget {
+  final String paymentId;
+  const PaymentDetailsScreen({super.key, required this.paymentId});
+  @override
+  State<PaymentDetailsScreen> createState() => _PaymentDetailsScreenState();
+}
+
+class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
+  bool busy = false;
+  Future<void> review(bool confirm) async {
+    final store = StoreScope.of(context);
+    String reason = '';
+    if (!confirm) {
+      final c = TextEditingController();
+      final result = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reject payment'),
+          content: TextField(
+            controller: c,
+            decoration: const InputDecoration(
+              labelText: 'Reason for rejection',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, c.text),
+              child: const Text('Reject'),
+            ),
+          ],
+        ),
+      );
+      // Keep the controller alive until the dialog exit transition completes.
+      Future<void>.delayed(const Duration(milliseconds: 400), c.dispose);
+      if (result == null) return;
+      reason = result;
+    } else {
+      if (store.researchReady) {
+        open(
+          context,
+          ResearchPaymentEntry(
+            tenancyId: store.payment(widget.paymentId).tenancyId,
+            paymentId: widget.paymentId,
+          ),
+        );
+        return;
+      }
+      final yes = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Confirm you received this payment?'),
+          content: Text(
+            store.payment(widget.paymentId).method == 'Cash'
+                ? 'Confirm only after checking the cash received.'
+                : 'Match the amount, date and transaction reference to money received in your bank account. BackyardPay has no direct bank connection.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Confirm received'),
+            ),
+          ],
+        ),
+      );
+      if (yes != true) return;
+    }
+    if (!mounted) return;
+    setState(() => busy = true);
+    await perform(
+      context,
+      () => store.reviewPayment(
+        widget.paymentId,
+        confirm: confirm,
+        reason: reason,
+      ),
+      success: confirm ? 'Payment confirmed.' : 'Payment rejected.',
+    );
+    if (mounted) setState(() => busy = false);
+  }
+
+  Future<void> pdf(bool share) async {
+    final store = StoreScope.of(context);
+    setState(() => busy = true);
+    await perform(context, () async {
+      final p = store.payment(widget.paymentId);
+      final bytes = await receiptPdf(store, p.id);
+      if (share) {
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'BackyardPay-${p.reference}.pdf',
+        );
+      } else {
+        await Printing.layoutPdf(
+          name: 'BackyardPay-${p.reference}',
+          onLayout: (_) async => bytes,
+        );
+      }
+    });
+    if (mounted) setState(() => busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context),
+        p = store.payment(widget.paymentId),
+        t = store.tenancy(p.tenancyId);
+    final tenant = store.tenantAccount(t),
+        property = store.property(t.propertyId);
+    final confirmed = p.state == ReviewState.confirmed;
+    return PageShell(
+      title: confirmed ? 'Digital payment receipt' : 'Payment submission',
+      children: [
+        heading(p.state.name.toUpperCase()),
+        if (p.state == ReviewState.pending)
+          panel(
+            Text(
+              store.currentUser!.role == Role.landlord
+                  ? 'The tenant reported this payment. Check your cash or bank records, then confirm the amount and rent months.'
+                  : 'Payment reported. Your landlord still needs to check and confirm it. A receipt will be available after confirmation.',
+            ),
+          ),
+        if (p.state == ReviewState.reversed)
+          panel(
+            Text(
+              'Received payment reversed: ${p.rejectionReason}. The original record is kept, but this payment no longer reduces rent owed.',
+            ),
+          ),
+        if (p.state == ReviewState.rejected)
+          panel(Text('Rejected: ${p.rejectionReason}')),
+        panel(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              detail('Tenant', tenant.name),
+              detail('Property', property.name),
+              detail('Room', t.room),
+              if (!store.researchReady) detail('Rent month', p.period),
+              if (p.payer.isNotEmpty) detail('Person who paid', p.payer),
+              if (store.researchReady) ...[
+                heading('Rent months covered'),
+                for (final a in p.splits)
+                  detail(monthLabel(a.period), money(a.amountCents)),
+                detail(
+                  p.state == ReviewState.confirmed
+                      ? 'Money not yet linked to a month'
+                      : 'Reported money not yet linked to a month',
+                  money(p.creditCents),
+                ),
+              ],
+              detail('Amount', money(p.amountCents)),
+              detail('Method', p.method),
+              detail(
+                'Payment date',
+                p.paidOn.toIso8601String().split('T').first,
+              ),
+              detail('Record reference', p.reference),
+              if (p.bankReference.isNotEmpty)
+                detail('Bank transaction reference', p.bankReference),
+              if (p.notes.isNotEmpty) detail('Notes', p.notes),
+              if (confirmed) ...[
+                if (p.method == 'EFT' || p.method == 'PayShap')
+                  panel(
+                    const Text(
+                      'This receipt records the landlord’s confirmation and shows which rent months are covered. Keep your bank proof too.',
+                      style: TextStyle(color: Palette.goldLight, height: 1.8),
+                    ),
+                  ),
+                detail(
+                  'Confirmed on',
+                  p.reviewedAt!.toLocal().toString().split('.').first,
+                ),
+                if (!store.researchReady)
+                  detail('Paid after due date', store.isLate(p) ? 'Yes' : 'No'),
+                if (!store.researchReady)
+                  detail(
+                    'Month balance',
+                    money(store.outstanding(t, p.period)),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        if (store.currentUser!.role == Role.landlord &&
+            p.state == ReviewState.pending) ...[
+          action(
+            'Confirm payment',
+            busy ? null : () => review(true),
+            icon: Icons.check_circle_outline,
+          ),
+          OutlinedButton(
+            onPressed: busy ? null : () => review(false),
+            child: const Text('Reject payment'),
+          ),
+        ],
+        if (confirmed) ...[
+          if (store.researchReady &&
+              store.currentUser!.role == Role.landlord &&
+              p.creditCents > 0)
+            action(
+              'Choose months for the remaining money',
+              () => open(
+                context,
+                ResearchPaymentEntry(
+                  tenancyId: t.id,
+                  paymentId: p.id,
+                  credit: true,
+                ),
+              ),
+            ),
+          action(
+            'Print / save PDF',
+            busy ? null : () => pdf(false),
+            icon: Icons.picture_as_pdf_outlined,
+          ),
+          action(
+            'Download / share receipt',
+            busy ? null : () => pdf(true),
+            icon: Icons.share_outlined,
+          ),
+        ],
+        if (busy) const LinearProgressIndicator(),
+        if (p.state == ReviewState.reversed)
+          action(
+            'Download original receipt with reversal note',
+            () => pdf(true),
+            icon: Icons.download_outlined,
+          ),
+        if (store.researchReady &&
+            confirmed &&
+            store.currentUser!.role == Role.landlord)
+          action(
+            'Record return / reversal',
+            () => open(
+              context,
+              EditorPage(
+                title: 'Record payment reversal',
+                help: 'Use this only when money was returned or a confirmed payment was recorded by mistake. It does not send money. The original record stays visible, but stops reducing rent owed. If only part was returned, record the full reversal and then record the amount you kept, using linked payment references.',
+                fields: const [
+                  FieldSpec(
+                    'reason',
+                    'Actual reversal / correction and evidence reference',
+                    multiline: true,
+                  ),
+                ],
+                save: (v) async {
+                  await store.researchAction('reverse_payment', {
+                    'id': p.id,
+                    'reason': v['reason'],
+                  });
+                },
+              ),
+            ),
+          ),
+        action(
+          'Back to dashboard',
+          () => home(context),
+          icon: Icons.home_outlined,
+        ),
+      ],
+    );
+  }
+}

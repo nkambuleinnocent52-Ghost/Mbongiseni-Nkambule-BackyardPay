@@ -1,4 +1,4 @@
-import 'package:mbongiseni_nkambule_apt_application/screens/auth.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/auth/auth.dart';
 
 import 'dart:convert';
 
@@ -6,10 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/store.dart';
 import 'package:mbongiseni_nkambule_apt_application/models/models.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/common.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/payment_entry.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/research_records.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/rental_account.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/shared/common.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/payments/payment_entry.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/rentals/research_records.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/rentals/rental_account.dart';
 import 'package:mbongiseni_nkambule_apt_application/ui/design.dart';
 
 import 'fixtures.dart';

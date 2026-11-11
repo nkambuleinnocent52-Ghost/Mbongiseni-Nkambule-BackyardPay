@@ -6,14 +6,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data/cloud_gateway.dart';
 
 import 'data/store.dart';
-import 'screens/common.dart';
-import 'screens/auth.dart';
-import 'screens/dashboard.dart';
+import 'screens/shared/common.dart';
+import 'screens/auth/auth.dart';
+import 'screens/shared/dashboard.dart';
 import 'services/alerts.dart';
 import 'services/auth_callback.dart';
 import 'ui/design.dart';
 
-import 'screens/password_recovery.dart';
+import 'screens/auth/password_recovery.dart';
 
 class BackyardPayApp extends StatefulWidget {
   final AppStore? store;

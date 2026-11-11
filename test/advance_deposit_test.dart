@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/rent_payment_months.dart';
 import 'package:mbongiseni_nkambule_apt_application/data/store.dart';
 import 'package:mbongiseni_nkambule_apt_application/models/models.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/common.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/deposit_payments.dart';
-import 'package:mbongiseni_nkambule_apt_application/screens/payment_entry.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/shared/common.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/payments/deposit_payments.dart';
+import 'package:mbongiseni_nkambule_apt_application/screens/payments/payment_entry.dart';
 import 'package:mbongiseni_nkambule_apt_application/ui/design.dart';
 
 import 'fixtures.dart';

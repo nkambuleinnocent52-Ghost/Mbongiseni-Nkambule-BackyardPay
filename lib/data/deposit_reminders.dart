@@ -55,8 +55,11 @@ DepositReminderInfo? depositReminderInfo({
   // active legacy records without an explicit agreement consistent.
   final policy = tenancy.record['depositDeadlinePolicy'];
   final note = tenancy.record['depositDueNote'];
-  final explicitLegacyDate = policy == 'legacy_agreed' ||
-      ((policy == null || policy == '') && note is String && note.trim().isNotEmpty);
+  final explicitLegacyDate =
+      policy == 'legacy_agreed' ||
+      ((policy == null || policy == '') &&
+          note is String &&
+          note.trim().isNotEmpty);
   final customDue = explicitLegacyDate
       ? _recordDate(tenancy.record['depositDueOn'])
       : null;
