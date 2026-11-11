@@ -39,6 +39,8 @@ class AppStore extends ChangeNotifier {
   AppStore(this.storage, {this.cloud});
   final CloudGateway? cloud;
   bool get isCloud => cloud != null;
+  int depositRemindersVersion = 0;
+  bool depositReminderScheduler = false;
   int simpleRentalsVersion = 0;
   int researchVersion = 0;
   List<Map<String, dynamic>> rentTerms = [],
@@ -129,6 +131,8 @@ class AppStore extends ChangeNotifier {
   String _snapshot() => jsonEncode({
     'version': 1,
     'researchVersion': researchVersion,
+    'depositRemindersVersion': depositRemindersVersion,
+    'depositReminderScheduler': depositReminderScheduler,
     'rentTerms': rentTerms,
     'caseRecords': caseRecords,
     'depositPaymentReports': depositPaymentReports,
@@ -142,6 +146,8 @@ class AppStore extends ChangeNotifier {
   void _restore(String raw) {
     final j = jsonDecode(raw) as Map<String, dynamic>;
     if (j['version'] != 1) throw StateError('Unsupported saved data version.');
+    depositRemindersVersion = j['depositRemindersVersion'] ?? 0;
+    depositReminderScheduler = j['depositReminderScheduler'] == true;
     simpleRentalsVersion = j['simpleRentalsVersion'] ?? 0;
     researchVersion = j['researchVersion'] ?? 0;
     depositPaymentReports = (j['depositPaymentReports'] as List? ?? [])

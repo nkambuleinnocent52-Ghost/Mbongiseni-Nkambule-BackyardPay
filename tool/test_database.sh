@@ -67,3 +67,28 @@ cat supabase/migrations/202611080002_south_african_dates.sql \
   | docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/advance_rent.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_payment_reports.sql
+
+# Ten-day deposit reminders and scheduler-independent scoped fallback.
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110003_deposit_reminders.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110003_deposit_reminders.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminders.sql
+
+# Exercise pg_cron API/status in this stock image using a test-only scheduler
+# contract stub; this does not claim a real hosted background scheduler ran.
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminder_scheduler_fixture.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110003_deposit_reminders.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110003_deposit_reminders.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminder_scheduler.sql
+
+# Replay the complete four-part owner upgrade after reminders are installed:
+# earlier wrapper replacements must not strand the reminder or deposit layers.
+# Read source migrations so this also works from the source ZIP without downloads.
+cat supabase/migrations/202611080002_south_african_dates.sql \
+    supabase/migrations/202611110001_advance_rent.sql \
+    supabase/migrations/202611110002_deposit_payment_reports.sql \
+    supabase/migrations/202611110003_deposit_reminders.sql \
+  | docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/advance_rent.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_payment_reports.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminders.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminder_scheduler.sql

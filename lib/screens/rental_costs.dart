@@ -27,7 +27,7 @@ class RentalCosts extends StatelessWidget {
             money(store.research.depositReceived(t)),
           ),
           if (t.record['depositDueOn'] != null)
-            detail('Deposit due by move-in', t.record['depositDueOn']),
+            detail('Agreed deposit due date', t.record['depositDueOn']),
           detail(
             'Deposit still due',
             depositDue == null ? 'Not recorded' : money(depositDue),
@@ -49,7 +49,7 @@ class RentalCosts extends StatelessWidget {
               money(store.creditFor(t)),
             ),
           const Text(
-            'The deposit is refundable security, subject to lawful supported deductions and applicable rules. It is due before occupation under the agreed terms and is not rent. Pending reports do not reduce these recorded balances. Check any unallocated money before collecting more.',
+            'The deposit is refundable security, subject to lawful supported deductions and applicable rules. Follow the agreed deposit due date. It is not rent. Pending reports do not reduce these recorded balances. Check any unallocated money before collecting more.',
           ),
         ],
       ),

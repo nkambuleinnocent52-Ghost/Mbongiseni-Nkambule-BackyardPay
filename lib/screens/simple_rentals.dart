@@ -1,3 +1,4 @@
+import 'deposit_reminder_notice.dart';
 import 'deposit_payments.dart';
 
 import 'package:flutter/material.dart';
@@ -367,6 +368,8 @@ class _DepositSummaryState extends State<DepositSummary> {
       subtitle:
           '${money(received)} received · ${due == null ? 'Amount not specified' : money(due) + ' still due'}',
       children: [
+        DepositReminderNotice(tenancyId: t.id),
+        DepositReminderSettings(tenancyId: t.id),
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,
           value: done,

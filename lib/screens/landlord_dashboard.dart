@@ -15,6 +15,7 @@ class LandlordDashboardScreen extends StatelessWidget {
           .where((r) => r['state'] == 'pending')
           .length;
       return [
+        const DepositReminderOverview(),
         if (depositPending > 0)
           action(
             'Deposit payments to check ($depositPending)',

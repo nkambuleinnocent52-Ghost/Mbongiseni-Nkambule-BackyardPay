@@ -23,6 +23,7 @@ Open the source project in Visual Studio Code and expand `lib`. The compiled Net
 | `lib/screens/common.dart`, `lib/ui/design.dart` | Shared page layout, navigation helpers, styling and components. |
 | `lib/models/` | Data classes for properties, tenants, payments and other records. |
 | `lib/data/` | App state, Supabase access, room availability and rental accounting. |
+| `lib/data/deposit_reminders.dart`, `lib/screens/deposit_reminder_notice.dart` | Ten-day deposit status calculation, visible warnings and agreed deadline controls. Server scheduling is in migration `202611110003_deposit_reminders.sql`. |
 | `lib/services/` | PDF receipts, alerts and authentication callback handling. |
 | `supabase/migrations/` | Database structure, authorization and server-side validation. |
 | `test/`, `supabase/tests/`, `tool/` | Automated checks and release/build tools. |
