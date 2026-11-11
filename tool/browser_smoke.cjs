@@ -7,14 +7,15 @@ const fs=require('node:fs');
 const crypto=require('node:crypto');
 const dir=process.env.EVIDENCE_DIR || '/tmp/backyardpay-cloud-evidence';fs.mkdirSync(dir,{recursive:true});
 const users=[], properties=[], tenancies=[], payments=[], notices=[], cases=[], depositPaymentReports=[];
-const now=()=>new Date().toISOString();
-const jwt=u=>`${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')}.test-only`;
+let clockOffsetMs=0;
+const now=()=>new Date(Date.now()+clockOffsetMs).toISOString();
+const jwt=u=>`${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor((Date.now()+clockOffsetMs)/1000)+3600})).toString('base64url')}.test-only`;
 const session=u=>({access_token:jwt(u),refresh_token:u.id,token_type:'bearer',expires_in:3600,user:{id:u.id,email:u.email,role:'authenticated',aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:now()}});
 const snapshot=u=>{
  const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
  const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
  const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
- return {version:1,researchVersion:2,prorationVersion:1,depositReportsVersion:1,advanceRentVersion:1,depositPaymentsVersion:1,depositRemindersVersion:1,depositReminderScheduler:false,depositPaymentReports:depositPaymentReports.filter(r=>ts.some(t=>t.id===r.tenancyId)),rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+ return {version:1,researchVersion:2,prorationVersion:1,depositReportsVersion:1,advanceRentVersion:1,depositPaymentsVersion:1,depositRemindersVersion:1,depositReminderScheduler:false,fixedRentalPolicyVersion:1,depositPaymentReports:depositPaymentReports.filter(r=>ts.some(t=>t.id===r.tenancyId)),rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
 };
 let browser;
 let recoveryEmail;
@@ -51,7 +52,7 @@ let recoveryEmail;
      result=crypto.randomUUID();properties.push({...a,id:result,landlordId:u.id,roomRents:{},code:'BP-CONTRACT-TEST',latitude:null,longitude:null});
     } else if(body.operation==='room_rents'){const p=properties.find(p=>p.id===a.propertyId);p.roomRents=a.rates;result=p.id;
     } else if(body.operation==='property_message'){result=1;notices.push({id:crypto.randomUUID(),userId:tenancies[0].userId,title:'Property update',message:a.message,createdAt:now(),read:false});
-    } else if(body.operation==='deposit_deadline'){const t=tenancies.find(t=>t.id===a.tenancyId);assert(t);assert.equal(properties.find(p=>p.id===t.propertyId).landlordId,u.id);t.record.depositDueOn=a.date;t.record.depositDueNote=a.note;result=t.id;
+
     } else if(body.operation==='deposit_update'){result=a.eventId;cases.push({id:result,tenancyId:a.tenancyId,kind:'deposit',body:a.body,actor:u.id,createdAt:now()});
     } else if(body.operation==='deposit_report'){
      const t=tenancies.find(t=>t.id===a.tenancyId);assert(t&&t.userId===u.id,'Tenant may report only their own deposit');
@@ -62,7 +63,8 @@ let recoveryEmail;
      if(r.state==='pending'){r.state=a.confirm?'confirmed':'rejected';r.reason=a.reason||'';r.reviewedAt=now();if(a.confirm)cases.push({id:r.id,tenancyId:r.tenancyId,kind:'deposit',body:{event:'received',amountCents:r.amountCents,date:r.paidOn,method:r.method,reference:r.reference,bankReference:r.bankReference,payer:r.payer,note:'Tenant deposit payment confirmed by landlord'},actor:u.id,createdAt:now()});notices.push({id:crypto.randomUUID(),userId:t.userId,title:a.confirm?'Deposit payment confirmed':'Deposit payment not confirmed',message:r.reason||'Your deposit payment has been checked',createdAt:now(),read:false});}
     } else if(body.operation==='tenancy'){
      const p=properties.find(p=>p.id===a.propertyId);assert(p);result=crypto.randomUUID();
-     tenancies.push({id:result,userId:'',propertyId:p.id,room:String(a.room),startPeriod:a.start.slice(0,7),rentCents:p.roomRents[String(a.room)]??p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,invitation:'JOIN-'+crypto.randomUUID().replaceAll('-','').toUpperCase(),record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:a.start}});
+     const moveIn=new Date(a.start+'T00:00:00Z');moveIn.setUTCDate(moveIn.getUTCDate()+10);const depositDueOn=moveIn.toISOString().slice(0,10);
+     tenancies.push({id:result,userId:'',propertyId:p.id,room:String(a.room),startPeriod:a.start.slice(0,7),rentCents:p.roomRents[String(a.room)]??p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,invitation:'JOIN-'+crypto.randomUUID().replaceAll('-','').toUpperCase(),record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:a.start,depositDueOn,depositDeadlinePolicy:'move_in_plus_10'}});
     } else if(body.operation==='payment'){
      result=crypto.randomUUID();payments.push({...a,id:result,period:a.paidOn.slice(0,7),state:'pending',submittedAt:now()});
     } else if(body.operation==='review'){
@@ -105,11 +107,13 @@ let recoveryEmail;
   await fill(page,'Full name',role==='LANDLORD'?'Owner Test':'Tenant Test');await fill(page,'Phone number','0711234567');await fill(page,'Email',email);await fill(page,'Password','TestPassword123!');await fill(page,'Confirm password','TestPassword123!');
   if(role==='TENANT'){assert.equal(await page.getByRole('textbox',{name:'Room number',exact:true}).count(),0);await fill(page,'Private invitation from your landlord',tenancies[0].invitation);}
   await button(page,'Create account');await page.getByText(role==='LANDLORD'?'Landlord dashboard':'Tenant dashboard',{exact:true}).waitFor();
+  const rules=await semantics(page);assert(rules.includes('Monthly rent: due on the 1st'));assert(rules.includes('Security deposit: once, within 10 days of move-in'));
  };
  const owner=await make();assert(!((await owner.locator('body').innerText()).toLowerCase().includes('demo')));
  await register(owner,'LANDLORD','owner@contract.test');await button(owner,'My properties');await button(owner,'Add property');
  for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2'],['Security deposit per new tenancy (rand; 0 if none)','2000']])await fill(owner,name,value);
- await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();await owner.getByText('My Real Rooms',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
+ assert.equal(await owner.getByRole('textbox',{name:/Due day/}).count(),0,'Rent day is fixed rather than chosen on the property form');
+ await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();assert.equal(properties[0].dueDay,1,'New property rent is due on the first');await owner.getByText('My Real Rooms',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
  await expand(owner,'Room rent');await owner.getByRole('checkbox',{name:'Room 1',exact:true}).evaluate(e=>e.click());await fill(owner,'Monthly rent for selected rooms (rand)','1800');await button(owner,'Save room rent');assert.equal(properties[0].roomRents['1'],180000);await button(owner,'Back');await button(owner,'Back');
  await button(owner,'Add tenant record');await button(owner,'Enter tenant details');await fill(owner,'Tenant full name','Tenant Test');
  const room=owner.getByRole('button',{name:'Available room',exact:true});
@@ -147,12 +151,12 @@ let recoveryEmail;
  await button(tenant,'Payment history');await tenant.getByText(futurePaymentLabel,{exact:false}).first().click();
  const advanceDownloadPromise=tenant.waitForEvent('download');await button(tenant,'Download / share receipt');const advanceDownload=await advanceDownloadPromise;
  const advanceBytes=fs.readFileSync(await advanceDownload.path());assert.equal(advanceBytes.subarray(0,4).toString(),'%PDF');fs.writeFileSync(dir+'/advance-rent-receipt.pdf',advanceBytes);await tenant.screenshot({path:dir+'/advance-rent-confirmed.png'});
- // An agreed deposit deadline ten South African calendar days ago must warn once it is overdue.
- await button(owner,'Back to dashboard');await button(owner,'My tenants');await owner.getByText('Tenant Test',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
- await expand(owner,'Security deposit');await expand(owner,'Deposit due date and reminder');
- const sastToday=new Date(Date.now()+2*60*60*1000);const depositDueDate=new Date(Date.UTC(sastToday.getUTCFullYear(),sastToday.getUTCMonth(),sastToday.getUTCDate()-10)).toISOString().slice(0,10);
- await fill(owner,'Agreed deposit due date (YYYY-MM-DD)',depositDueDate);await fill(owner,'Reason / agreement for this due date','Agreed deposit date for this isolated reminder test');await button(owner,'Save agreed due date');assert.equal(tenancies[0].record.depositDueOn,depositDueDate);
- await button(owner,'Back');await button(owner,'Back');
+ // The fixed deposit is due once, ten days after actual move-in; warning starts on that date.
+ assert.equal(tenancies[0].dueDay,1,'Monthly rent stays due on the first');
+ const reminderTime=new Date(tenancies[0].record.tenancyStartedOn+'T12:00:00+02:00');reminderTime.setUTCDate(reminderTime.getUTCDate()+10);
+ assert.equal(tenancies[0].record.depositDueOn,reminderTime.toISOString().slice(0,10));assert.equal(tenancies[0].record.depositDeadlinePolicy,'move_in_plus_10');
+ clockOffsetMs=reminderTime.getTime()-Date.now();await owner.clock.setFixedTime(reminderTime);await tenant.clock.setFixedTime(reminderTime);
+ await button(owner,'Back to dashboard');
  await button(tenant,'Back to dashboard');await button(tenant,'Refresh records');
  const unpaidReminder=tenant.getByRole('button',{name:'Report a deposit payment',exact:true});await reveal(tenant,unpaidReminder);assert.equal(await unpaidReminder.count(),1,'Tenant sees an overdue deposit warning after ten days');assert((await semantics(tenant)).includes('Deposit reminder'));await tenant.screenshot({path:dir+'/deposit-reminder-tenant.png'});
  await button(tenant,'Record payment');await choose(tenant,'Payment for','Security deposit');
@@ -186,6 +190,9 @@ let recoveryEmail;
  await button(owner,'Back');await button(owner,'My tenants');await owner.getByText('Tenant Test',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
  assert.equal(await owner.getByRole('button',{name:'Rental documents / supporting files',exact:true}).count(),0);
  await expand(owner,'Security deposit');assert(await owner.getByRole('checkbox',{name:/Deposit received/}).first().isChecked());assert.equal(cases.filter(r=>r.kind==='deposit'&&r.body.event==='received').length,1,'Checking an already confirmed deposit must not record it twice');
+ await expand(owner,'Deposit deadline');assert.equal(await owner.getByRole('button',{name:'Save agreed due date',exact:true}).count(),0);assert.equal(await owner.getByRole('textbox',{name:'Agreed deposit due date (YYYY-MM-DD)',exact:true}).count(),0);const deadlineLabel=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'Africa/Johannesburg'}).format(reminderTime);assert((await semantics(owner)).includes(deadlineLabel),'Readonly deadline is move-in plus ten days');
+ await owner.mouse.move(1050,700);await owner.mouse.wheel(0,650);await owner.waitForTimeout(250);
+ await expand(owner,'Monthly rent');assert.equal(await owner.getByRole('textbox',{name:/Due day/}).count(),0,'Rent-change form cannot choose another rent day');
  await owner.mouse.move(1050,700);await owner.mouse.wheel(0,-5000);await owner.waitForTimeout(250);await owner.screenshot({path:dir+'/simple-rental-desktop.png'});
  await owner.setViewportSize({width:390,height:844});await owner.screenshot({path:dir+'/simple-rental-phone.png'});await owner.setViewportSize({width:1440,height:1000});
 
@@ -202,6 +209,6 @@ let recoveryEmail;
  await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());
  await button(tenant,'GET STARTED');await button(tenant,'TENANT');await fill(tenant,'Email','tenant@contract.test');await fill(tenant,'Password','ReplacementPass123!');await button(tenant,'Login');await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
  assert.deepEqual(errors,[]);assert.equal(users.length,2);assert.equal(payments[0].state,'confirmed');
- console.log('Cloud browser/API contract passed: two isolated browser sessions, registration, custom room rates, landlord room assignment, payment approval, future-month rent and receipt, ten-day deposit warning and agreed deadline, pending-only review wording without pay-again warning, tenant deposit report/landlord confirmation clearing reminder, PDF, shared issue acknowledgement, private reply, property broadcast, resolution, inline deposit receipt, compact phone/desktop layout, restored Auth session and password recovery. Transport simulated; hosted email and database activation remain unverified.');
+ console.log('Cloud browser/API contract passed: two isolated browser sessions, registration, custom room rates, landlord room assignment, payment approval, future-month rent and receipt, fixed rent day1 and one-off deposit deadline at move-in+10 days, warning at that deadline, pending-only review wording without pay-again warning, tenant deposit report/landlord confirmation clearing reminder, PDF, shared issue acknowledgement, private reply, property broadcast, resolution, inline deposit receipt, compact phone/desktop layout, restored Auth session and password recovery. Transport simulated; hosted email and database activation remain unverified.');
  await browser.close();
 })().catch(async e=>{console.error(e);if(browser)await browser.close();process.exit(1);});

@@ -62,7 +62,8 @@ class _DashboardLayoutState extends State<_DashboardLayout> {
             ),
           ],
         ),
-        gap(22),
+        const RentalPaymentRules(),
+        gap(10),
         if (!owner && first != null) DepositReminderNotice(tenancyId: first.id),
         Align(
           alignment: Alignment.centerLeft,

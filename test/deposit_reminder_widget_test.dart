@@ -22,7 +22,7 @@ void main() {
     saved['depositRemindersVersion'] = 1;
     saved['depositReminderScheduler'] = false;
     final today = DateTime.now().toUtc().add(const Duration(hours: 2));
-    final due = DateTime.utc(
+    final moveIn = DateTime.utc(
       today.year,
       today.month,
       today.day,
@@ -32,7 +32,9 @@ void main() {
       tenancy['depositReceivedCents'] = 0;
       tenancy['record'] = {
         ...Map<String, dynamic>.from(tenancy['record'] ?? {}),
-        'depositDueOn': due.toIso8601String().split('T').first,
+        'tenancyStartedOn': moveIn.toIso8601String().split('T').first,
+        'depositDueOn': moveIn.add(const Duration(days: 10)).toIso8601String().split('T').first,
+        'depositDeadlinePolicy': 'move_in_plus_10',
       };
     }
     storage.data = jsonEncode(saved);
@@ -145,7 +147,7 @@ void main() {
           tester,
           DepositReminderSettings(tenancyId: store.tenancies.first.id),
         );
-        await tester.tap(find.text('Deposit due date and reminder'));
+        await tester.tap(find.text('Deposit deadline'));
         await tester.pumpAndSettle();
         expect(
           find.text(
@@ -155,10 +157,11 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(find.text('Save agreed due date'), findsOneWidget);
+        expect(find.text('Save agreed due date'), findsNothing);
+        expect(find.byType(TextFormField), findsNothing);
         expect(
           find.textContaining(
-            'does not give extra time to pay or create a penalty',
+            'One-off security deposit: pay within 10 calendar days of moving in.',
           ),
           findsOneWidget,
         );
@@ -176,7 +179,7 @@ void main() {
         tester,
         DepositReminderSettings(tenancyId: store.tenancies.first.id),
       );
-      expect(find.textContaining('Agreed deposit due date'), findsOneWidget);
+      expect(find.textContaining('Deposit deadline'), findsOneWidget);
       expect(find.textContaining('Reminder from'), findsOneWidget);
       expect(find.text('Save agreed due date'), findsNothing);
       expect(find.byType(TextFormField), findsNothing);

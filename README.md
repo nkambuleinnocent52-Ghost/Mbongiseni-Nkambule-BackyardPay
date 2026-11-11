@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Latest release: 1.2.1, build 11.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.2.1.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
+> **Latest release: 1.3.0, build 12.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.3.0.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -98,3 +98,5 @@ Implementation uses Flutter/Dart, shared_preferences, cryptography, geolocator, 
 - [Source backup ZIP](https://github.com/nkambuleinnocent52-Ghost/Mbongiseni-Nkambule-BackyardPay/blob/main/downloads/BackyardPay-Netlify-source.zip?raw=true) — editable Flutter project.
 
 The website is not deployed by uploading these files to GitHub. Hosting and Android testing are separate steps.
+
+Version1.3.0 fixes the rules: rent on the1st; new tenant deposit once within10days of move-in, with no extra10-day reminder delay. Apply downloads/BackyardPay-Fixed-Payment-Rules.sql before the latest web ZIP.

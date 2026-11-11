@@ -49,7 +49,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
     context,
     EditorPage(
       title: property == null ? 'Add property' : 'Edit property',
-      help: 'Due day is 1–28. Rent and due-day changes apply to new tenancies; existing tenancy terms stay unchanged. Specify the agreed refundable security deposit (0 if none). It is separate from rent; a setting does not record money received. No payment processing is performed.',
+      help: 'Monthly rent is due on the 1st. A new tenant pays the one-off security deposit within 10 calendar days of move-in. Set the deposit amount separately from rent (0 if none). Recording these amounts does not record money received.',
       preview: (context, v) {
         try {
           final cents = parseMoney(v['rent']!);
@@ -105,12 +105,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
               : (property!.securityDepositCents! / 100).toStringAsFixed(2),
           numeric: true,
         ),
-        FieldSpec(
-          'due',
-          'Due day of month (1–28)',
-          initial: '${property?.dueDay ?? 1}',
-          numeric: true,
-        ),
+
       ],
       save: (v) async {
         await store.saveProperty(
@@ -122,7 +117,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
           postalCode: v['postal']!,
           rooms: int.tryParse(v['rooms']!) ?? 0,
           rentCents: parseMoney(v['rent']!),
-          dueDay: int.tryParse(v['due']!) ?? 0,
+          dueDay: 1,
           prorateFirstMonth: v['proration'] == 'Prorate actual calendar days',
           securityDepositCents: parseDeposit(v['deposit']!),
         );
@@ -243,7 +238,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     ? 'Actual calendar days from move-in, inclusive'
                     : 'Full month by agreement',
               ),
-              detail('Due day', '${p.dueDay}'),
+              detail('Monthly rent due', '1st of every month'),
               if (landlord)
                 const Text(
                   'Assign the tenant an available room first. Share the private invitation from that tenant’s rental record; property codes cannot be used for account registration.',

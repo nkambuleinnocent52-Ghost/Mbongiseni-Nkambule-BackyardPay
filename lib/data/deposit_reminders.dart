@@ -20,7 +20,8 @@ class DepositReminderInfo {
   });
 }
 
-/// Builds the ten-calendar-day reminder status from confirmed deposit receipts.
+/// Computes a one-off deposit deadline ten calendar days after actual move-in.
+/// The reminder becomes eligible on the deadline itself, not ten days later.
 ///
 /// A pending tenant report is not money received, but its amount is excluded
 /// from a pay-again warning. When pending reports cover everything outstanding,
@@ -42,17 +43,28 @@ DepositReminderInfo? depositReminderInfo({
     return null;
   }
 
-  final dueOn =
-      _recordDate(tenancy.record['depositDueOn']) ??
+  final actualStart =
       _recordDate(tenancy.record['tenancyStartedOn']) ??
       (tenancy.leaseStart == null
           ? null
           : _calendarDate(tenancy.leaseStart!)) ??
       _recordDate('${tenancy.startPeriod}-01');
+  // Preserve an existing explicitly agreed deadline, but do not treat the old
+  // automatic move-in-date value as a custom agreement. New records store the
+  // move_in_plus_10 policy and its calculated date; deriving it here also keeps
+  // active legacy records without an explicit agreement consistent.
+  final policy = tenancy.record['depositDeadlinePolicy'];
+  final note = tenancy.record['depositDueNote'];
+  final explicitLegacyDate = policy == 'legacy_agreed' ||
+      ((policy == null || policy == '') && note is String && note.trim().isNotEmpty);
+  final customDue = explicitLegacyDate
+      ? _recordDate(tenancy.record['depositDueOn'])
+      : null;
+  final dueOn = customDue ?? actualStart?.add(const Duration(days: 10));
   if (dueOn == null) return null;
 
   final date = _calendarDate(today);
-  final eligibleOn = dueOn.add(const Duration(days: 10));
+  final eligibleOn = dueOn;
   final daysSinceDue = date.difference(dueOn).inDays;
   final outstanding = ledger.depositOutstanding(tenancy)!;
   final pending = reports

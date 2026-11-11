@@ -229,7 +229,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                 ? 'Choose which rent months this money covers. The money has already been received; this does not record another payment.'
                 : owner
                 ? 'Use this after you receive cash or see the payment in your bank account. Check the amount and rent month before confirming. This app does not transfer money.'
-                : 'Already paid your landlord? Enter the payment here and choose the month it covers. Your landlord will check it and confirm. This app does not send money.',
+                : 'Monthly rent is due on the 1st. Already paid your landlord? Enter the payment here and choose the month it covers. Your landlord will check it and confirm. This app does not send money.',
           ),
         ),
         Form(

@@ -6,8 +6,7 @@ import '../ui/design.dart';
 import 'common.dart';
 import 'dashboard.dart' show dateLabel;
 import 'deposit_payments.dart';
-import 'simple_rentals.dart' show InlineRentalForm, RentalSection;
-import 'research_records.dart' show isoDay, checkedDate;
+import 'simple_rentals.dart' show RentalSection;
 
 DateTime _todayInSouthAfrica() =>
     DateTime.now().toUtc().add(const Duration(hours: 2));
@@ -61,7 +60,7 @@ class DepositReminderNotice extends StatelessWidget {
           if (info.unreportedCents > 0)
             Text(
               owner
-                  ? '${money(info.unreportedCents)} of this tenant’s deposit is still not recorded as received or reported. The agreed due date was ${dateLabel(info.dueOn)}.'
+                  ? '${money(info.unreportedCents)} of this tenant’s deposit is still not recorded as received or reported. The deposit deadline was ${dateLabel(info.dueOn)}.'
                   : '${money(info.unreportedCents)} of your deposit is still not recorded as received or reported. Please pay it, report it if you already paid, or contact your landlord.',
             ),
           if (info.pendingCents > 0)
@@ -96,12 +95,13 @@ class DepositReminderSettings extends StatelessWidget {
     );
     if (info == null) return const SizedBox.shrink();
     final owner = s.currentUser!.role == Role.landlord;
+    final legacy = t.record['depositDeadlinePolicy'] == 'legacy_agreed' || (t.record['depositDeadlinePolicy'] != 'move_in_plus_10' && (t.record['depositDueNote']?.toString().trim().isNotEmpty ?? false));
     final details = <Widget>[
-      detail('Agreed deposit due date', dateLabel(info.dueOn)),
+      const Text('One-off security deposit: pay within 10 calendar days of moving in.'),
+      detail('Deposit deadline', dateLabel(info.dueOn)),
       detail('Reminder from', dateLabel(info.eligibleOn)),
-      const Text(
-        'If a deposit remains unpaid, a reminder is due after 10 calendar days. This does not give extra time to pay or create a penalty.',
-      ),
+      if (legacy) const Text('This rental keeps its previously agreed deposit deadline.'),
+      const Text('The reminder starts at the deadline if money is still outstanding. There is no extra ten-day waiting period.'),
     ];
     if (!owner)
       return Column(
@@ -109,8 +109,8 @@ class DepositReminderSettings extends StatelessWidget {
         children: details,
       );
     return RentalSection(
-      title: 'Deposit due date and reminder',
-      subtitle: 'A reminder after 10 days',
+      title: 'Deposit deadline',
+      subtitle: '10 days from move-in — paid once',
       children: [
         ...details,
         Padding(
@@ -123,25 +123,7 @@ class DepositReminderSettings extends StatelessWidget {
                 : 'Reminders are checked when you open or refresh the app. Daily background checks are not active yet.',
           ),
         ),
-        const Text(
-          'Use the date agreed with this tenant. Record the agreement if you allow a later payment date.',
-        ),
-        InlineRentalForm(
-          fields: const {
-            'date': 'Agreed deposit due date (YYYY-MM-DD)',
-            'note': 'Reason / agreement for this due date',
-          },
-          initial: {'date': isoDay(info.dueOn)},
-          label: 'Save agreed due date',
-          save: (v, id) async {
-            checkedDate(v['date']!);
-            await s.researchAction('deposit_deadline', {
-              'tenancyId': t.id,
-              'date': v['date'],
-              'note': v['note'],
-            });
-          },
-        ),
+
       ],
     );
   }

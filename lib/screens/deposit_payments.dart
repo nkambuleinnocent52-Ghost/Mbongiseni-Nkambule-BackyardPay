@@ -144,7 +144,7 @@ class _DepositPaymentScreenState extends State<DepositPaymentScreen> {
       children: [
         PaymentPurpose(tenancyId: t.id, deposit: true),
         const Text(
-          'Paid your security deposit by cash or through your bank? Tell your landlord here. This does not send money. The deposit stays separate from rent and is only marked received after your landlord confirms it.',
+          'Your security deposit is paid once, within 10 calendar days of moving in. Paid it by cash or through your bank? Tell your landlord here. This does not send money. The deposit stays separate from rent and is only marked received after your landlord confirms it.',
         ),
         gap(16),
         panel(

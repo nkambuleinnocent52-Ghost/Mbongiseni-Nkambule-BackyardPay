@@ -237,7 +237,7 @@ class SimpleRentalDetails extends StatelessWidget {
           ),
           RentalSection(
             title: 'Monthly rent',
-            subtitle: 'Agreed changes and effective dates',
+            subtitle: 'Due on the 1st · agreed changes and dates',
             children: [
               if (owner && t.endedOn == null)
                 InlineRentalForm(
@@ -258,7 +258,7 @@ class SimpleRentalDetails extends StatelessWidget {
                       'tenancyId': t.id,
                       'period': v['period'],
                       'amountCents': parseMoney(v['amount']!),
-                      'dueDay': rate?['dueDay'] ?? t.dueDay,
+                      'dueDay': 1,
                       'evidence': v['evidence'],
                     });
                   },

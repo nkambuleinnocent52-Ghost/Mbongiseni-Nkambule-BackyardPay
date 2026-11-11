@@ -90,13 +90,13 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                               ),
                               heading('Move-in costs'),
                               detail(
-                                'Security deposit',
+                                'One-off security deposit (pay within 10 days)',
                                 property.securityDepositCents == null
                                     ? 'Not specified — edit property first'
                                     : money(property.securityDepositCents!),
                               ),
                               detail(
-                                'First rent charge',
+                                'Rent due on move-in',
                                 money(
                                   property.prorateFirstMonth
                                       ? proratedFirstCharge(roomRent, date)
@@ -105,7 +105,7 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                               ),
                               if (property.securityDepositCents != null)
                                 detail(
-                                  'Total initially due',
+                                  'Total rent and deposit',
                                   money(
                                     property.securityDepositCents! +
                                         (property.prorateFirstMonth
@@ -124,7 +124,7 @@ class _TenantRecordFormState extends State<_TenantRecordForm> {
                                 ),
                               ),
                               const Text(
-                                'Confirm this move-in date and billing basis with the tenant. The deposit is separate.',
+                                'First rent is due on move-in. After that, monthly rent is due on the 1st. Pay the separate one-off deposit within 10 calendar days of move-in.',
                               ),
                             ],
                           ),
@@ -830,7 +830,6 @@ void recordRentChange(BuildContext context, String tenancyId) {
           initial: periodOf(DateTime(now.year, now.month + 1)),
         ),
         const FieldSpec('amount', 'Agreed monthly rent (rand)', numeric: true),
-        const FieldSpec('due', 'Due day (1–28)', initial: '1', numeric: true),
         const FieldSpec(
           'evidence',
           'Agreement / notice evidence and explanation',
@@ -843,7 +842,7 @@ void recordRentChange(BuildContext context, String tenancyId) {
           'tenancyId': tenancyId,
           'period': v['period'],
           'amountCents': parseMoney(v['amount']!),
-          'dueDay': int.tryParse(v['due']!) ?? 0,
+          'dueDay': 1,
           'evidence': v['evidence'],
         });
       },

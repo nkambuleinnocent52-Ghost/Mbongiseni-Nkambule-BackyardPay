@@ -51,17 +51,70 @@ void main() {
     expect(status(today: DateTime(2026, 11, 10, 23, 59))!.overdue, isFalse);
     final dayTen = status(today: DateTime(2026, 11, 11, 0, 0))!;
     expect(dayTen.overdue, isTrue);
-    expect(dayTen.daysSinceDue, 10);
+    expect(dayTen.daysSinceDue, 0);
     expect(dayTen.eligibleOn, DateTime.utc(2026, 11, 11));
     final dayEleven = status(today: DateTime(2026, 11, 12, 1, 15))!;
     expect(dayEleven.overdue, isTrue);
-    expect(dayEleven.daysSinceDue, 11);
+    expect(dayEleven.daysSinceDue, 1);
   });
 
-  test('a later agreed due date postpones the reminder', () {
-    final t = rental(record: {'depositDueOn': '2026-11-08'});
+  test('new deadline metadata never adds another ten days to the deadline', () {
+    final t = rental(record: {
+      'tenancyStartedOn': '2026-11-01',
+      'depositDueOn': '2026-11-11',
+      'depositDeadlinePolicy': 'move_in_plus_10',
+    });
+    final info = status(tenancy: t)!;
+    expect(info.dueOn, DateTime.utc(2026, 11, 11));
+    expect(info.eligibleOn, info.dueOn);
+    expect(info.overdue, isTrue);
+  });
+
+  test('move-in policy overrides stale custom dates and leftover notes', () {
+    final t = rental(record: {
+      'tenancyStartedOn': '2026-11-01',
+      'depositDueOn': '2026-11-30',
+      'depositDueNote': 'Old note must not extend the new policy',
+      'depositDeadlinePolicy': 'move_in_plus_10',
+    });
+    final info = status(tenancy: t)!;
+    expect(info.dueOn, DateTime.utc(2026, 11, 11));
+    expect(info.eligibleOn, info.dueOn);
+    expect(info.overdue, isTrue);
+  });
+
+  test('marked legacy agreement retains its date without requiring a note', () {
+    final t = rental(record: {
+      'tenancyStartedOn': '2026-11-01',
+      'depositDueOn': '2026-11-18',
+      'depositDeadlinePolicy': 'legacy_agreed',
+    });
+    final info = status(tenancy: t)!;
+    expect(info.dueOn, DateTime.utc(2026, 11, 18));
+    expect(info.eligibleOn, info.dueOn);
+    expect(info.overdue, isFalse);
+  });
+
+  test('old automatic due dates without agreement use move-in plus ten', () {
+    final t = rental(record: {
+      'tenancyStartedOn': '2026-11-04',
+      'depositDueOn': '2026-11-04',
+    });
+    final info = status(tenancy: t)!;
+    expect(info.dueOn, DateTime.utc(2026, 11, 14));
+    expect(info.eligibleOn, info.dueOn);
+    expect(info.overdue, isFalse);
+  });
+
+  test('an explicit legacy agreement remains due on its agreed date', () {
+    final t = rental(record: {
+      'tenancyStartedOn': '2026-11-01',
+      'depositDueOn': '2026-11-18',
+      'depositDueNote': 'Existing agreement to pay on 18 November',
+    });
     expect(status(tenancy: t)!.overdue, isFalse);
-    expect(status(tenancy: t)!.daysSinceDue, 3);
+    expect(status(tenancy: t)!.daysSinceDue, -7);
+    expect(status(tenancy: t)!.dueOn, DateTime.utc(2026, 11, 18));
     expect(status(tenancy: t)!.eligibleOn, DateTime.utc(2026, 11, 18));
     expect(status(tenancy: t, today: DateTime(2026, 11, 18))!.overdue, isTrue);
   });
@@ -71,12 +124,12 @@ void main() {
       record: {'tenancyStartedOn': '2026-11-04'},
       leaseStart: DateTime(2026, 11, 3),
     );
-    expect(status(tenancy: t)!.dueOn, DateTime.utc(2026, 11, 4));
+    expect(status(tenancy: t)!.dueOn, DateTime.utc(2026, 11, 14));
     expect(
       status(tenancy: rental(leaseStart: DateTime(2026, 11, 3)))!.dueOn,
-      DateTime.utc(2026, 11, 3),
+      DateTime.utc(2026, 11, 13),
     );
-    expect(status()!.dueOn, DateTime.utc(2026, 11, 1));
+    expect(status()!.dueOn, DateTime.utc(2026, 11, 11));
   });
 
   test(
@@ -85,10 +138,11 @@ void main() {
       final t = rental(
         record: {
           'depositDueOn': '2026-02-30',
+          'depositDueNote': 'A malformed legacy agreement',
           'tenancyStartedOn': '2026-11-04',
         },
       );
-      expect(status(tenancy: t)!.dueOn, DateTime.utc(2026, 11, 4));
+      expect(status(tenancy: t)!.dueOn, DateTime.utc(2026, 11, 14));
       expect(
         status(
           tenancy: rental(
@@ -96,7 +150,7 @@ void main() {
             leaseStart: DateTime(2026, 11, 3),
           ),
         )!.dueOn,
-        DateTime.utc(2026, 11, 3),
+        DateTime.utc(2026, 11, 13),
       );
       expect(status(tenancy: rental(startPeriod: 'invalid')), isNull);
     },

@@ -92,3 +92,20 @@ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/te
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_payment_reports.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminders.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_reminder_scheduler.sql
+
+# The fixed-policy migration preserves old already-charged terms before enforcing
+# rent on day1 and a ten-day initial deposit deadline for new/default rentals.
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/fixed_policy_legacy_fixture.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110004_fixed_rental_policy.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110004_fixed_rental_policy.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/fixed_rental_policy.sql
+
+# Complete current owner upgrade: earlier wrapper definitions must not strand
+# either the fixed-policy facade or reminder snapshot after a replay.
+cat supabase/migrations/202611080002_south_african_dates.sql \
+    supabase/migrations/202611110001_advance_rent.sql \
+    supabase/migrations/202611110002_deposit_payment_reports.sql \
+    supabase/migrations/202611110003_deposit_reminders.sql \
+    supabase/migrations/202611110004_fixed_rental_policy.sql \
+  | docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/fixed_rental_policy.sql

@@ -1,3 +1,4 @@
+import 'payment_rules.dart';
 import 'deposit_reminder_notice.dart';
 import 'deposit_payments.dart';
 import 'simple_rentals.dart';
