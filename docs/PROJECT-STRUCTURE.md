@@ -17,7 +17,7 @@ Open the source project in Visual Studio Code and expand `lib`. The compiled Net
 | `lib/screens/dashboard_widgets.dart` | Reusable rental cards, collection chart, month selector and date labels. |
 | `lib/screens/tenants_page.dart` | Landlord tenant list, rental-detail entry and rent-reminder form. |
 | `lib/screens/properties.dart`, `room_rents.dart`, `room_availability.dart` | Property details, custom room prices and availability. |
-| `lib/screens/payment_entry.dart`, `payments.dart` | Tenant payment reporting, landlord confirmation, payment history and receipts. |
+| `lib/screens/payment_entry.dart`, `payments.dart`, `deposit_payments.dart` | Rent/deposit payment reporting, landlord confirmation, payment history and receipts. |
 | `lib/screens/simple_rentals.dart`, `rental_account.dart`, `research_records.dart` | Rental details, deposits, problems, rent changes, move-out and supporting rental records. |
 | `lib/screens/profile.dart` | Profile and notifications. |
 | `lib/screens/common.dart`, `lib/ui/design.dart` | Shared page layout, navigation helpers, styling and components. |
@@ -41,6 +41,6 @@ The `main` label on GitHub is also the branch name: it identifies the project ve
 
 ## Submission and deployment
 
-Submit the source project (`BackyardPay-Netlify-source.zip`) when code is required. Use the web ZIP (`BackyardPay-Netlify-web.zip`) only to deploy to Netlify. The organisation update changes no database schema, accounts or rental/payment rules and needs no SQL update.
+Submit the source project (`BackyardPay-Netlify-source.zip`) when code is required. Use the web ZIP (`BackyardPay-Netlify-web.zip`) only to deploy to Netlify. The 1.1.2 organisation update needs no SQL. Later functional releases can include database migrations; check their release instructions. Version 1.2.0 adds advance rent and deposit reports, with its own additive SQL update.
 
 Suggested explanation for a demonstration: “main.dart starts the application. Authentication lives in its own screen files. The signed-in role selects a separate landlord or tenant dashboard. Both reuse shared UI and accounting code. Supabase enforces access and stores the shared records.”

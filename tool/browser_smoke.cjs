@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const crypto=require('node:crypto');
 const dir=process.env.EVIDENCE_DIR || '/tmp/backyardpay-cloud-evidence';fs.mkdirSync(dir,{recursive:true});
-const users=[], properties=[], tenancies=[], payments=[], notices=[], cases=[];
+const users=[], properties=[], tenancies=[], payments=[], notices=[], cases=[], depositPaymentReports=[];
 const now=()=>new Date().toISOString();
 const jwt=u=>`${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')}.test-only`;
 const session=u=>({access_token:jwt(u),refresh_token:u.id,token_type:'bearer',expires_in:3600,user:{id:u.id,email:u.email,role:'authenticated',aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:now()}});
@@ -14,7 +14,7 @@ const snapshot=u=>{
  const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
  const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
  const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
- return {version:1,researchVersion:2,prorationVersion:1,depositReportsVersion:1,rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+ return {version:1,researchVersion:2,prorationVersion:1,depositReportsVersion:1,advanceRentVersion:1,depositPaymentsVersion:1,depositPaymentReports:depositPaymentReports.filter(r=>ts.some(t=>t.id===r.tenancyId)),rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
 };
 let browser;
 let recoveryEmail;
@@ -52,11 +52,18 @@ let recoveryEmail;
     } else if(body.operation==='room_rents'){const p=properties.find(p=>p.id===a.propertyId);p.roomRents=a.rates;result=p.id;
     } else if(body.operation==='property_message'){result=1;notices.push({id:crypto.randomUUID(),userId:tenancies[0].userId,title:'Property update',message:a.message,createdAt:now(),read:false});
     } else if(body.operation==='deposit_update'){result=a.eventId;cases.push({id:result,tenancyId:a.tenancyId,kind:'deposit',body:a.body,actor:u.id,createdAt:now()});
+    } else if(body.operation==='deposit_report'){
+     const t=tenancies.find(t=>t.id===a.tenancyId);assert(t&&t.userId===u.id,'Tenant may report only their own deposit');
+     const existing=depositPaymentReports.find(r=>r.id===a.eventId);result=a.eventId;
+     if(!existing){depositPaymentReports.push({...a,id:result,state:'pending',reason:'',submittedAt:now(),reviewedAt:null});notices.push({id:crypto.randomUUID(),userId:properties.find(p=>p.id===t.propertyId).landlordId,title:'Deposit payment reported',message:'Check this tenant deposit payment',createdAt:now(),read:false});}
+    } else if(body.operation==='deposit_review'){
+     const r=depositPaymentReports.find(r=>r.id===a.id);assert(r);const t=tenancies.find(t=>t.id===r.tenancyId);assert.equal(properties.find(p=>p.id===t.propertyId).landlordId,u.id,'Only landlord can confirm a deposit');result=r.id;
+     if(r.state==='pending'){r.state=a.confirm?'confirmed':'rejected';r.reason=a.reason||'';r.reviewedAt=now();if(a.confirm)cases.push({id:r.id,tenancyId:r.tenancyId,kind:'deposit',body:{event:'received',amountCents:r.amountCents,date:r.paidOn,method:r.method,reference:r.reference,bankReference:r.bankReference,payer:r.payer,note:'Tenant deposit payment confirmed by landlord'},actor:u.id,createdAt:now()});notices.push({id:crypto.randomUUID(),userId:t.userId,title:a.confirm?'Deposit payment confirmed':'Deposit payment not confirmed',message:r.reason||'Your deposit payment has been checked',createdAt:now(),read:false});}
     } else if(body.operation==='tenancy'){
      const p=properties.find(p=>p.id===a.propertyId);assert(p);result=crypto.randomUUID();
      tenancies.push({id:result,userId:'',propertyId:p.id,room:String(a.room),startPeriod:a.start.slice(0,7),rentCents:p.roomRents[String(a.room)]??p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,invitation:'JOIN-'+crypto.randomUUID().replaceAll('-','').toUpperCase(),record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:a.start}});
     } else if(body.operation==='payment'){
-     result=crypto.randomUUID();payments.push({...a,id:result,state:'pending',submittedAt:now()});
+     result=crypto.randomUUID();payments.push({...a,id:result,period:a.paidOn.slice(0,7),state:'pending',submittedAt:now()});
     } else if(body.operation==='review'){
      const p=payments.find(p=>p.id===a.id);assert(p);result=p.id;p.state=a.confirm?'confirmed':'rejected';p.reviewedAt=now();if(a.allocations)p.allocations=a.allocations;p.receiptDetails={tenant:'Tenant Test',landlord:'Owner Test',landlordAddress:'1 Owner Street',property:'My Real Rooms',address:'1 Test Street, Southernwood, East London, 5201',room:'1',issuedAllocations:p.allocations,issuedCreditCents:0};
      const t=tenancies.find(t=>t.id===p.tenancyId);notices.push({id:crypto.randomUUID(),userId:t.userId,title:'Payment confirmed',message:'Receipt available',createdAt:now(),read:false});
@@ -81,6 +88,15 @@ let recoveryEmail;
  };
  const fill=async(page,name,value)=>{const field=page.getByRole('textbox',{name,exact:true});await field.click();await page.waitForTimeout(120);await page.keyboard.press('Control+A');await page.keyboard.type(value);};
  const expand=async(page,name)=>{await page.getByRole('button',{name:new RegExp(name)}).first().evaluate(e=>e.click());await page.waitForTimeout(350);};
+ const choose=async(page,label,value)=>{
+  await page.getByRole('button',{name:new RegExp(label)}).first().evaluate(e=>e.click());await page.waitForTimeout(200);
+  await page.getByRole('menuitem',{name:value,exact:true}).evaluate(e=>e.click());await page.waitForTimeout(350);
+ };
+ const confirmRent=async(page)=>{
+  await button(page,'Confirm payment');const confirmation=page.getByRole('checkbox');
+  for(let i=0;i<12;i++){const b=await confirmation.boundingBox();if(b&&b.y>0&&b.y+b.height<950)break;await page.mouse.move(1050,700);await page.mouse.wheel(0,400);await page.waitForTimeout(150);}
+  await confirmation.click();await button(page,'Confirm received');await page.getByText(/^CONFIRMED$/).first().waitFor();
+ };
  const register=async(page,role,email)=>{
   await button(page,'GET STARTED');await button(page,role);await button(page,'Create an account');
   await fill(page,'Full name',role==='LANDLORD'?'Owner Test':'Tenant Test');await fill(page,'Phone number','0711234567');await fill(page,'Email',email);await fill(page,'Password','TestPassword123!');await fill(page,'Confirm password','TestPassword123!');
@@ -113,21 +129,44 @@ let recoveryEmail;
  await tenant.setViewportSize({width:390,height:844});await tenant.screenshot({path:dir+'/tenant-phone.png'});await tenant.setViewportSize({width:1440,height:1000});
  await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
  assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'));
+ // Paying a later rental month must be available without charging it as current debt.
+ const nextDate=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth()+1,1));
+ const nextPeriod=nextDate.toISOString().slice(0,7),nextLabel=new Intl.DateTimeFormat('en-GB',{month:'short',year:'numeric',timeZone:'UTC'}).format(nextDate);
+ const futurePaymentLabel='Tenant Test • R 1800.00';
+ await button(tenant,'Record payment');await choose(tenant,'Month paid for',nextLabel);
+ const advanceAmount=tenant.getByRole('textbox',{name:'How much did you pay? (rand)',exact:true});await advanceAmount.click();await tenant.waitForTimeout(150);assert.equal(await advanceAmount.inputValue(),'1800.00');
+ await tenant.screenshot({path:dir+'/advance-rent-report.png'});await button(tenant,'Submit payment');
+ assert.equal(payments.length,2);assert.equal(payments[1].allocations[0].period,nextPeriod);assert.equal(payments[1].state,'pending');
+ await button(owner,'Back to dashboard');await button(owner,'Refresh records');await button(owner,'Payment records');await owner.getByText(futurePaymentLabel,{exact:false}).first().click();await confirmRent(owner);
+ assert.equal(payments[1].receiptDetails.issuedAllocations[0].period,nextPeriod);
+ await button(tenant,'Back to dashboard');await button(tenant,'Refresh records');
+ assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'),'Advance payment does not change current-month balance');
+ await button(tenant,'Payment history');await tenant.getByText(futurePaymentLabel,{exact:false}).first().click();
+ const advanceDownloadPromise=tenant.waitForEvent('download');await button(tenant,'Download / share receipt');const advanceDownload=await advanceDownloadPromise;
+ const advanceBytes=fs.readFileSync(await advanceDownload.path());assert.equal(advanceBytes.subarray(0,4).toString(),'%PDF');fs.writeFileSync(dir+'/advance-rent-receipt.pdf',advanceBytes);await tenant.screenshot({path:dir+'/advance-rent-confirmed.png'});
+ await button(tenant,'Back to dashboard');await button(tenant,'Record payment');await choose(tenant,'Payment for','Security deposit');
+ await fill(tenant,'Deposit paid (rand)','2000.00');await choose(tenant,'How was it paid?','EFT');await fill(tenant,'Bank payment reference','TENANT-DEPOSIT-EFT-TEST');
+ await tenant.screenshot({path:dir+'/deposit-report-tenant.png'});await button(tenant,'Send deposit payment');
+ assert.equal(depositPaymentReports.length,1);assert.equal(depositPaymentReports[0].state,'pending');assert.equal(cases.filter(r=>r.kind==='deposit').length,0,'A tenant report is not a received deposit');
+ await button(owner,'Back to dashboard');await button(owner,'Refresh records');await button(owner,'Deposit payments to check (1)');
+ await owner.getByRole('checkbox',{name:/I checked that this deposit payment was received/}).evaluate(e=>e.click());await button(owner,'Confirm deposit payment');
+ assert.equal(depositPaymentReports[0].state,'confirmed');assert.equal(cases.filter(r=>r.kind==='deposit'&&r.body.event==='received').length,1);await owner.screenshot({path:dir+'/deposit-confirmed-landlord.png'});
+ await button(owner,'Back');await button(tenant,'Refresh records');
+ assert((await tenant.locator('body').innerText()).includes('Recorded balance: R 0.00'),'Deposit stays separate from rent balance');
  await button(tenant,'Report a problem / account query');
  await fill(tenant,'Where is the problem?','Outside shared tap');await fill(tenant,'Describe the issue','Water is leaking continuously from the shared tap. Please arrange an inspection.');await button(tenant,'Send issue');
- await button(owner,'Back to dashboard');await button(owner,'Refresh records');await button(owner,'Tenant reports');
+ await button(owner,'Refresh records');await button(owner,'Tenant reports');
  assert(cases.some(r=>r.kind==='repair'));await owner.screenshot({path:dir+'/report-before-ack.png'});fs.writeFileSync(dir+'/report-semantics.json',JSON.stringify(await owner.locator('[role]').evaluateAll(es=>es.map(e=>({role:e.getAttribute('role'),label:e.getAttribute('aria-label'),text:e.innerText}))),null,2));
  await owner.getByRole('checkbox',{name:/Noted by landlord/}).evaluate(e=>e.click());await owner.waitForTimeout(350);
  assert(cases.some(r=>r.kind==='case_update'&&r.body.status==='in_progress'));
  await expand(owner,'Reply / send update');await fill(owner,'Update message','Plumber contacted; agreeing access with the tenant.');await button(owner,'Send update');
- assert.equal(tenancies[0].depositCents,200000);assert.equal(payments.length,1,'Report created no payment');
+ assert.equal(tenancies[0].depositCents,200000);assert.equal(payments.length,2,'Issue and deposit report created no extra rent payment');
  await owner.screenshot({path:dir+'/report-followup.png'});
  await owner.getByRole('switch').evaluate(e=>e.click());await fill(owner,'Update message','Shared pipe repairs are booked for noon.');await button(owner,'Send update');assert(notices.some(n=>n.message==='Shared pipe repairs are booked for noon.'));
  await button(owner,'Mark resolved');assert(cases.some(r=>r.kind==='case_update'&&r.body.status==='resolved'));
  await button(owner,'Back');await button(owner,'My tenants');await owner.getByText('Tenant Test',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
  assert.equal(await owner.getByRole('button',{name:'Rental documents / supporting files',exact:true}).count(),0);
- await expand(owner,'Security deposit');await owner.getByRole('checkbox',{name:/Deposit received/}).evaluate(e=>e.click());
- await fill(owner,'Receipt / bank reference','DEPOSIT-RECEIPT-TEST');await button(owner,'Confirm deposit received');assert(cases.some(r=>r.kind==='deposit'&&r.body.amountCents===200000));
+ await expand(owner,'Security deposit');assert(await owner.getByRole('checkbox',{name:/Deposit received/}).first().isChecked());assert.equal(cases.filter(r=>r.kind==='deposit'&&r.body.event==='received').length,1,'Checking an already confirmed deposit must not record it twice');
  await owner.mouse.move(1050,700);await owner.mouse.wheel(0,-5000);await owner.waitForTimeout(250);await owner.screenshot({path:dir+'/simple-rental-desktop.png'});
  await owner.setViewportSize({width:390,height:844});await owner.screenshot({path:dir+'/simple-rental-phone.png'});await owner.setViewportSize({width:1440,height:1000});
 
@@ -144,6 +183,6 @@ let recoveryEmail;
  await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());
  await button(tenant,'GET STARTED');await button(tenant,'TENANT');await fill(tenant,'Email','tenant@contract.test');await fill(tenant,'Password','ReplacementPass123!');await button(tenant,'Login');await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();
  assert.deepEqual(errors,[]);assert.equal(users.length,2);assert.equal(payments[0].state,'confirmed');
- console.log('Cloud browser/API contract passed: two isolated browser sessions, registration, custom room rates, landlord room assignment, payment approval, PDF, shared issue acknowledgement, private reply, property broadcast, resolution, inline deposit receipt, compact phone/desktop layout, restored Auth session and password recovery. Transport simulated; hosted email and database activation remain unverified.');
+ console.log('Cloud browser/API contract passed: two isolated browser sessions, registration, custom room rates, landlord room assignment, payment approval, future-month rent and receipt, tenant deposit report/landlord confirmation, PDF, shared issue acknowledgement, private reply, property broadcast, resolution, inline deposit receipt, compact phone/desktop layout, restored Auth session and password recovery. Transport simulated; hosted email and database activation remain unverified.');
  await browser.close();
 })().catch(async e=>{console.error(e);if(browser)await browser.close();process.exit(1);});

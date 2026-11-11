@@ -1,3 +1,5 @@
+import '../data/rent_payment_months.dart';
+import 'deposit_payments.dart';
 import 'dashboard.dart' show monthLabel;
 
 import 'package:flutter/material.dart';
@@ -60,13 +62,23 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
         );
       }
     } else if (!widget.credit) {
-      periods.add(periodOf(DateTime.now()));
+      final choices = rentPaymentMonths(
+        t,
+        DateTime.now(),
+      ).where((m) => s.expected(t, m) > 0).toList();
+      periods.add(
+        choices.where((m) => s.outstanding(t, m) > 0).firstOrNull ??
+            choices.lastOrNull ??
+            periodOf(DateTime.now()),
+      );
       allocated.add(
         TextEditingController(
           text: (s.outstanding(t, periods.first) / 100).toStringAsFixed(2),
         ),
       );
     }
+    if (p == null && !widget.credit && allocated.isNotEmpty)
+      amount.text = allocated.first.text;
     ready = true;
   }
 
@@ -168,6 +180,14 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
       enabled: !busy && edit,
       decoration: InputDecoration(labelText: label),
       maxLines: multiline ? 3 : 1,
+      onChanged: (_) {
+        if (c == amount &&
+            periods.length == 1 &&
+            widget.paymentId == null &&
+            !widget.credit)
+          allocated.first.text = amount.text;
+        setState(() {});
+      },
       validator: optional ? null : requiredField,
     ),
   );
@@ -176,11 +196,10 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
     final s = StoreScope.of(context),
         t = s.tenancy(widget.tenancyId),
         owner = s.currentUser!.role == Role.landlord;
-    final months = s
-        .ledger(t)
-        .where((r) => r.chargedCents > 0)
-        .map((r) => r.period)
-        .toList();
+    final months = rentPaymentMonths(
+      t,
+      DateTime.now(),
+    ).where((m) => s.expected(t, m) > 0).toList();
     for (final p in periods) {
       if (!months.contains(p)) months.add(p);
     }
@@ -202,6 +221,8 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
           : 'Report a payment',
       maxWidth: 800,
       children: [
+        if (!owner && p == null && !widget.credit)
+          PaymentPurpose(tenancyId: t.id, deposit: false),
         panel(
           Text(
             widget.credit
@@ -287,16 +308,31 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                             labelText: 'Month paid for',
                           ),
                           items: months
+                              .where(
+                                (m) => m == periods[i] || !periods.contains(m),
+                              )
                               .map(
                                 (m) => DropdownMenuItem(
                                   value: m,
-                                  child: Text(monthLabel(m)),
+                                  child: Text(
+                                    '${monthLabel(m)}${s.outstanding(t, m) == 0 ? ' (paid)' : ''}',
+                                  ),
                                 ),
                               )
                               .toList(),
                           onChanged: busy
                               ? null
-                              : (v) => setState(() => periods[i] = v!),
+                              : (v) => setState(() {
+                                  periods[i] = v!;
+                                  if (p == null &&
+                                      !widget.credit &&
+                                      periods.length == 1) {
+                                    final due = (s.outstanding(t, v) / 100)
+                                        .toStringAsFixed(2);
+                                    amount.text = due;
+                                    allocated[i].text = due;
+                                  }
+                                }),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -334,7 +370,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                     ],
                   ),
                 ),
-              if (months.isNotEmpty)
+              if (months.any((m) => !periods.contains(m)))
                 OutlinedButton.icon(
                   onPressed: busy
                       ? null

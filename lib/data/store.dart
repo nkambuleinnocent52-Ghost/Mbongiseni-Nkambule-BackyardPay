@@ -41,7 +41,9 @@ class AppStore extends ChangeNotifier {
   bool get isCloud => cloud != null;
   int simpleRentalsVersion = 0;
   int researchVersion = 0;
-  List<Map<String, dynamic>> rentTerms = [], caseRecords = [];
+  List<Map<String, dynamic>> rentTerms = [],
+      caseRecords = [],
+      depositPaymentReports = [];
   ResearchLedger get research => ResearchLedger(rentTerms, caseRecords);
   bool get researchReady => researchVersion >= 2;
   Future<dynamic> researchAction(String op, Map<String, dynamic> args) {
@@ -129,6 +131,7 @@ class AppStore extends ChangeNotifier {
     'researchVersion': researchVersion,
     'rentTerms': rentTerms,
     'caseRecords': caseRecords,
+    'depositPaymentReports': depositPaymentReports,
     'session': _session,
     'accounts': _accounts.map((a) => a.toJson()).toList(),
     'properties': _properties.map((a) => a.toJson()).toList(),
@@ -141,6 +144,9 @@ class AppStore extends ChangeNotifier {
     if (j['version'] != 1) throw StateError('Unsupported saved data version.');
     simpleRentalsVersion = j['simpleRentalsVersion'] ?? 0;
     researchVersion = j['researchVersion'] ?? 0;
+    depositPaymentReports = (j['depositPaymentReports'] as List? ?? [])
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
     rentTerms = (j['rentTerms'] as List? ?? [])
         .map((r) => Map<String, dynamic>.from(r))
         .toList();

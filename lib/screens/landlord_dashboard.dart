@@ -11,7 +11,16 @@ class LandlordDashboardScreen extends StatelessWidget {
           .where((p) => p.period == period && p.state == ReviewState.pending)
           .toList();
       final reviewAmount = pending.fold(0, (sum, p) => sum + p.amountCents);
+      final depositPending = store.depositPaymentReports
+          .where((r) => r['state'] == 'pending')
+          .length;
       return [
+        if (depositPending > 0)
+          action(
+            'Deposit payments to check ($depositPending)',
+            () => open(context, const DepositReportsOverview()),
+            icon: Icons.savings_outlined,
+          ),
         LayoutBuilder(
           builder: (context, c) {
             final occupied = store.tenancies.where(store.isOccupied).length,

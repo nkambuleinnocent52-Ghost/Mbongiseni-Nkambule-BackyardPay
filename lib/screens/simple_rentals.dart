@@ -1,3 +1,5 @@
+import 'deposit_payments.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
@@ -356,6 +358,9 @@ class _DepositSummaryState extends State<DepositSummary> {
     final due = s.research.depositOutstanding(t),
         held = s.research.depositBalance(t),
         received = s.research.depositReceived(t);
+    final pendingReports = s.depositPaymentReports
+        .where((r) => r['tenancyId'] == t.id && r['state'] == 'pending')
+        .length;
     final done = due != null && due == 0;
     return RentalSection(
       title: 'Security deposit',
@@ -365,7 +370,7 @@ class _DepositSummaryState extends State<DepositSummary> {
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,
           value: done,
-          onChanged: owner && !done && due != null
+          onChanged: owner && !done && due != null && pendingReports == 0
               ? (v) => setState(() => recording = v ?? false)
               : null,
           title: Text(
@@ -375,6 +380,21 @@ class _DepositSummaryState extends State<DepositSummary> {
             'Separate from monthly rent. Saving an actual payment confirms the tick.',
           ),
         ),
+        if (!owner && due != null && due > 0 && t.endedOn == null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () =>
+                  open(context, DepositPaymentScreen(tenancyId: t.id)),
+              icon: const Icon(Icons.add_card),
+              label: const Text('Report deposit payment'),
+            ),
+          ),
+        if (pendingReports > 0)
+          const Text(
+            'A deposit payment is waiting for the landlord to check. It is not counted as received yet.',
+          ),
+        DepositReportsList(tenancyId: t.id),
         if (recording && !done) ...[
           DropdownButtonFormField<String>(
             initialValue: method,

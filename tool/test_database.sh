@@ -50,3 +50,20 @@ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/te
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611080002_south_african_dates.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611080002_south_african_dates.sql
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/south_african_dates.sql
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110001_advance_rent.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110001_advance_rent.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/advance_rent.sql
+
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110002_deposit_payment_reports.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/migrations/202611110002_deposit_payment_reports.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_payment_reports.sql
+
+# Replaying the complete owner upgrade must retain the outer deposit wrapper
+# after its earlier South African date wrapper is re-created.
+cat supabase/migrations/202611080002_south_african_dates.sql \
+    supabase/migrations/202611110001_advance_rent.sql \
+    supabase/migrations/202611110002_deposit_payment_reports.sql \
+  | docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/advance_rent.sql
+docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/deposit_payment_reports.sql
