@@ -406,8 +406,8 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
           panel(
             Text(
               store.currentUser!.role == Role.landlord
-                ? 'The tenant reported this payment. Check your cash or bank records, then confirm the amount and rent months.'
-                : 'Payment reported. Your landlord still needs to check and confirm it. A receipt will be available after confirmation.',
+                  ? 'The tenant reported this payment. Check your cash or bank records, then confirm the amount and rent months.'
+                  : 'Payment reported. Your landlord still needs to check and confirm it. A receipt will be available after confirmation.',
             ),
           ),
         if (p.state == ReviewState.reversed)

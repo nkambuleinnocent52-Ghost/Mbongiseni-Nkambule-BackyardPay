@@ -1,6 +1,6 @@
 # BackyardPay
 
-> **Latest release: 1.1.1, build 8.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.1.1.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
+> **Latest release: 1.1.2, build 9.** [Rebuilt Netlify ZIP](downloads/BackyardPay-Netlify-web.zip) · [Source ZIP](downloads/BackyardPay-Netlify-source.zip) · [Changes and checks](docs/releases/Netlify-1.1.2.md). The old Research web ZIP remains on hold after a Defender detection; keep it quarantined. The new release has source, build, browser and independent scanner checks; no Microsoft clearance is claimed. Let Windows check the new download normally.
 
 Flutter rental record application for APT 41P2 using Supabase Auth and PostgreSQL. Browser development is the current target; Android location permissions are configured for later device testing. The app records payments and never transfers money.
 
@@ -16,6 +16,8 @@ The black/gold design is retained. See the [research implementation audit](docs/
 - Separate stakeholder dashboards show relevant records, credit, attention items and actions. Location, optional active-browser alerts and in-app notifications remain.
 
 ## Activate the update
+
+**For 1.1.2:** Source organised into clear login, landlord-dashboard and tenant-dashboard files. [Project structure / submission guide](docs/PROJECT-STRUCTURE.md). No SQL changes.
 
 **For 1.1.1:** Plain payment wording for tenants and landlords. Upload the latest web ZIP; no new database migration. [Instructions](docs/releases/Netlify-1.1.1.md).
 
