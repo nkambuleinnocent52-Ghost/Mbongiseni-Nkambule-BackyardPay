@@ -149,7 +149,7 @@ class BrandMark extends StatelessWidget {
       ],
     ),
     child: Icon(
-      Icons.home_work_rounded,
+      Icons.home_outlined,
       color: const Color(0xFF17130B),
       size: size * .56,
     ),

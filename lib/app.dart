@@ -93,7 +93,7 @@ class _BackyardPayAppState extends State<BackyardPayApp> {
     } catch (_) {
       if (mounted)
         setState(
-          () => loadError = 'Your account records could not be loaded. Check your connection and retry. If this is the first cloud setup, the database setup script must be run first.',
+          () => loadError = 'Your account records could not be loaded. Check your connection and retry.',
         );
     }
   }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../services/alerts.dart';
+export 'notifications_screen.dart' show NotificationsScreen;
 import 'common.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -18,6 +18,18 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               detail('Email', user.email),
+              if (user.loginId != null)
+                detail(
+                  'Login ID',
+                  user.loginId!.replaceAllMapped(
+                    RegExp(r'([0-9]{3})([0-9]{3})([0-9]{3})'),
+                    (m) => '${m[1]} ${m[2]} ${m[3]}',
+                  ),
+                ),
+              if (user.loginId != null)
+                const Text(
+                  'Use your email or Login ID with the same password.',
+                ),
               detail('Phone', user.phone),
               detail('Role', user.role.name),
             ],
@@ -58,68 +70,11 @@ class ProfileScreen extends StatelessWidget {
           ),
           icon: Icons.lock_outline,
         ),
-        action('Logout', () async {
-          if (await perform(context, store.logout) && context.mounted)
-            home(context);
-        }, icon: Icons.logout),
         panel(
           const Text(
             'Your records are shared only with the landlord or tenant linked to your rental.',
           ),
         ),
-      ],
-    );
-  }
-}
-
-class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({super.key});
-  @override
-  Widget build(BuildContext context) {
-    final store = StoreScope.of(context), notices = store.notices;
-    return PageShell(
-      title: 'Notifications',
-      children: [
-        action(
-          'Enable browser alerts',
-          () => perform(context, () async {
-            final message = await enableAlerts();
-            if (context.mounted) tell(context, message);
-          }),
-          icon: Icons.notifications_active_outlined,
-        ),
-        const Text(
-          'Notifications are stored in your account. Browser alerts work while the app is open; these are not SMS or remote push messages.',
-        ),
-        gap(),
-        if (notices.isEmpty) panel(const Text('No notifications yet.')),
-        for (final n in notices)
-          panel(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  n.title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: n.read ? FontWeight.normal : FontWeight.bold,
-                  ),
-                ),
-                gap(8),
-                Text(n.message),
-                gap(8),
-                Text(n.createdAt.toLocal().toString().split('.').first),
-                if (!n.read)
-                  TextButton(
-                    onPressed: () =>
-                        perform(context, () => store.markRead(n.id)),
-                    child: const Text('Mark as read'),
-                  )
-                else
-                  const Text('Read'),
-              ],
-            ),
-          ),
       ],
     );
   }

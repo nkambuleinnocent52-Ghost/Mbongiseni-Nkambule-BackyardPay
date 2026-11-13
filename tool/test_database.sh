@@ -109,3 +109,19 @@ cat supabase/migrations/202611080002_south_african_dates.sql \
     supabase/migrations/202611110004_fixed_rental_policy.sql \
   | docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres
 docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < supabase/tests/fixed_rental_policy.sql
+
+# Current interface/permission update, applied in order without resetting records.
+for migration in supabase/migrations/20261112*.sql; do
+ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < "$migration"
+ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < "$migration"
+done
+for check in agreement_defaults actionable_notices login_ids payment_intent; do
+ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < "supabase/tests/$check.sql"
+done
+# A complete replay must keep every facade active, not just the last migration.
+for migration in supabase/migrations/20261112*.sql; do
+ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < "$migration"
+done
+for check in agreement_defaults actionable_notices login_ids payment_intent; do
+ docker exec -i "$container" psql -X -v ON_ERROR_STOP=1 -U postgres < "supabase/tests/$check.sql"
+done

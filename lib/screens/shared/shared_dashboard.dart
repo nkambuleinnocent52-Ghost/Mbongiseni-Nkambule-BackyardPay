@@ -35,11 +35,12 @@ class DashboardLayoutState extends State<DashboardLayout> {
             child: const Icon(Icons.notifications_outlined),
           ),
         ),
-        IconButton(
-          tooltip: 'Profile',
-          onPressed: () => open(context, const ProfileScreen()),
-          icon: const Icon(Icons.person_outline),
-        ),
+        if (MediaQuery.sizeOf(context).width >= 600)
+          IconButton(
+            tooltip: 'Profile',
+            onPressed: () => open(context, const ProfileScreen()),
+            icon: const Icon(Icons.person_outline),
+          ),
       ],
       children: [
         heading('Hello, ${user.name}'),

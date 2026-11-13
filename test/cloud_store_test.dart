@@ -18,6 +18,7 @@ void main() {
   late List<http.Request> requests;
   bool confirmationRequired = false, failSnapshot = false;
   String serverRole = 'landlord';
+  bool loginIdFeature = false, loginIdEndpoint = true;
   Map<String, dynamic> user() => {
     'id': '11111111-1111-4111-8111-111111111111',
     'aud': 'authenticated',
@@ -30,6 +31,8 @@ void main() {
   Map<String, dynamic> snapshot() => {
     ...CloudGateway.emptySnapshot,
     'session': user()['id'],
+    'loginIdsEnabled': loginIdFeature,
+    if (loginIdFeature) 'currentLoginId': '321654987',
     'accounts': [
       {
         'id': user()['id'],
@@ -47,6 +50,8 @@ void main() {
     confirmationRequired = false;
     failSnapshot = false;
     serverRole = 'landlord';
+    loginIdFeature = false;
+    loginIdEndpoint = true;
     storage = MemoryStorage()
       ..data = 'old browser records must not be uploaded';
     client = SupabaseClient(
@@ -77,6 +82,35 @@ void main() {
               'expires_in': 3600,
               'user': user(),
             }),
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (path.endsWith('/bp_login_id_enabled'))
+          return http.Response(
+            jsonEncode(loginIdFeature),
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        if (path.endsWith('/login-with-id')) {
+          if (!loginIdEndpoint)
+            return http.Response(
+              '{"message":"not deployed"}',
+              404,
+              request: request,
+              headers: {'content-type': 'application/json'},
+            );
+          if (request.method == 'GET')
+            return http.Response(
+              jsonEncode({'enabled': loginIdFeature}),
+              200,
+              request: request,
+              headers: {'content-type': 'application/json'},
+            );
+          return http.Response(
+            '{"refresh_token":"alias-test","access_token":"unused-test-access"}',
             200,
             request: request,
             headers: {'content-type': 'application/json'},
@@ -123,6 +157,36 @@ void main() {
   tearDown(() async {
     store.dispose();
     await client.dispose();
+  });
+  test(
+    'Login ID stays hidden until both activation and the endpoint are ready',
+    () async {
+      expect(await store.loginIdsAvailable(), false);
+      loginIdFeature = true;
+      loginIdEndpoint = false;
+      expect(await store.loginIdsAvailable(), false);
+      loginIdEndpoint = true;
+      expect(await store.loginIdsAvailable(), true);
+    },
+  );
+  test('Login ID calls the password endpoint then adopts the ordinary Auth session', () async {
+    loginIdFeature = true;
+    await store.login('321 654 987', 'UniquePassword123!', Role.landlord);
+    expect(store.currentUser?.email, 'owner@example.test');
+    expect(store.currentUser?.loginId, '321654987');
+    final endpoint = requests.singleWhere(
+      (r) => r.url.path.endsWith('/login-with-id') && r.method == 'POST',
+    );
+    expect(jsonDecode(endpoint.body), {
+      'loginId': '321654987',
+      'password': 'UniquePassword123!',
+    });
+    expect(requests.any((r) => r.url.path.endsWith('/token')), true);
+    expect(
+      requests.any((r) => r.url.path.contains('bp_begin_login_id_attempt')),
+      false,
+      reason: 'Email resolution is never called by the browser.',
+    );
   });
   test(
     'cloud load ignores old local accounts and cloud signup uses Auth',

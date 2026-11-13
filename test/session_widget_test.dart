@@ -20,10 +20,10 @@ void main() {
   ) async {
     await tester.pumpWidget(BackyardPayApp(store: store));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Profile'));
+    await tester.tap(find.byTooltip('Log out'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Logout'));
-    await tester.tap(find.text('Logout'));
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.tap(find.text('Log out'));
     await tester.pumpAndSettle();
     expect(store.currentUser, isNull);
     expect(find.byType(SplashScreen), findsOneWidget);

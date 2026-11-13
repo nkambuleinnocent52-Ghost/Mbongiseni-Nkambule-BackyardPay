@@ -4,7 +4,7 @@ Rental records for backyard landlords and tenants in East London, Eastern Cape.
 
 **Mbongiseni Nkambule · 231064977 · Application Technology IV (APT41P2)**
 
-The deployed release is **1.4.0 (build 13)**. The application records cash and bank payments; it does not transfer money. Tenant reports remain pending until the landlord confirms receipt. Rent and security deposits are recorded separately.
+The deployed release is **1.5.0 (build 14)**. The application records cash and bank payments; it does not transfer money. Tenant reports remain pending until the landlord confirms receipt. Rent and security deposits are recorded separately.
 
 ## Application
 
@@ -47,6 +47,10 @@ flutter test
 flutter run -d chrome
 ```
 
-Release 1.4.0 passed 84 Flutter tests and static analysis. Chromium checks used a simulated backend to exercise both roles, payments, deposits, receipts and account recovery. These checks do not establish native Android behaviour or live email delivery.
+Release 1.5.0 passed 105 Flutter tests and static analysis. Chromium checks used a simulated backend to exercise both roles, payments, deposits, receipts and account recovery. These checks do not establish native Android behaviour or live email delivery.
 
 `tool/build_netlify.sh` builds and packages the website. `tool/browser_smoke.cjs` checks the served application with isolated test data. `tool/test_database.sh` uses a disposable PostgreSQL database; it must not seed the live project.
+
+## Current update
+
+[Changes and lecturer-remarks review](docs/REVIEW.md). Existing 1.4.0 databases: apply [Review update SQL](downloads/BackyardPay-Review-Update.sql), then upload the web ZIP. [Optional Login ID setup](docs/setup/OPTIONAL-LOGIN-ID.md). Email login stays available.

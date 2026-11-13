@@ -16,7 +16,11 @@ Future<void> main() async {
     await Supabase.initialize(
       url: supabaseUrl,
       publishableKey: supabasePublishableKey,
-      authOptions: const FlutterAuthClientOptions(detectSessionInUri: false),
+      authOptions: const FlutterAuthClientOptions(
+        detectSessionInUri: false,
+        persistSession: true,
+        autoRefreshToken: true,
+      ),
     );
     runApp(const BackyardPayApp());
   } catch (_) {

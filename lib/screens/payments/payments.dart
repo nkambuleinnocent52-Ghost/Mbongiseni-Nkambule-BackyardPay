@@ -266,7 +266,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 '${store.tenantAccount(store.tenancy(p.tenancyId)).name} • ${money(p.amountCents)}',
               ),
               subtitle: Text(
-                '${p.period} • ${p.method} • ${p.state.name.toUpperCase()}\n${p.reference}',
+                'Rent • ${p.period} • ${p.method} • ${p.state.name.toUpperCase()}\n${p.reference}',
               ),
               isThreeLine: true,
               trailing: const Icon(Icons.chevron_right),
@@ -399,7 +399,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         property = store.property(t.propertyId);
     final confirmed = p.state == ReviewState.confirmed;
     return PageShell(
-      title: confirmed ? 'Digital payment receipt' : 'Payment submission',
+      title: confirmed ? 'Rent receipt' : 'Rent payment to check',
       children: [
         heading(p.state.name.toUpperCase()),
         if (p.state == ReviewState.pending)
@@ -422,11 +422,12 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              detail('Payment for', 'Rent'),
               detail('Tenant', tenant.name),
               detail('Property', property.name),
               detail('Room', t.room),
               if (!store.researchReady) detail('Rent month', p.period),
-              if (p.payer.isNotEmpty) detail('Person who paid', p.payer),
+              if (p.payer.isNotEmpty) detail('Paid by', p.payer),
               if (store.researchReady) ...[
                 heading('Rent months covered'),
                 for (final a in p.splits)

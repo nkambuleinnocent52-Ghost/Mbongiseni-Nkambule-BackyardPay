@@ -16,6 +16,35 @@ class StoreScope extends InheritedNotifier<AppStore> {
       context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
 }
 
+/// Confirmation stays beside the top-right control on every signed-in page.
+class LogoutMenu extends StatelessWidget {
+  const LogoutMenu({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    return PopupMenuButton<String>(
+      tooltip: 'Log out',
+      icon: const Icon(Icons.logout_outlined),
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 6),
+      enabled: !store.isBusy,
+      itemBuilder: (_) => const [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Text('Log out of BackyardPay?'),
+        ),
+        PopupMenuItem<String>(value: 'cancel', child: Text('Cancel')),
+        PopupMenuItem<String>(value: 'logout', child: Text('Log out')),
+      ],
+      onSelected: (value) async {
+        if (value != 'logout') return;
+        if (await perform(context, store.logout) && context.mounted)
+          home(context);
+      },
+    );
+  }
+}
+
 class PageShell extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -104,7 +133,7 @@ class PageShell extends StatelessWidget {
               ),
             ),
       appBar: AppBar(
-        title: Text(title),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           if (store.isCloud && user != null)
             IconButton(
@@ -113,6 +142,7 @@ class PageShell extends StatelessWidget {
               icon: const Icon(Icons.sync),
             ),
           ...?actions,
+          if (user != null) const LogoutMenu(),
         ],
         centerTitle: false,
         bottom: const PreferredSize(

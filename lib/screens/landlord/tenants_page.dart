@@ -24,7 +24,7 @@ class _TenantsScreenState extends State<TenantsScreen> {
           pending = store.payments.any(
             (p) =>
                 p.tenancyId == t.id &&
-                p.period == period &&
+                p.splits.any((a) => a.period == period) &&
                 p.state == ReviewState.pending,
           );
       return '${store.tenantAccount(t).name} ${t.room} ${store.property(t.propertyId).name}'

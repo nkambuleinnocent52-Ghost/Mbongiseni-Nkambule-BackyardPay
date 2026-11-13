@@ -6,7 +6,9 @@ import '../../ui/design.dart';
 import '../shared/common.dart';
 import '../payments/payment_entry.dart';
 import '../payments/payments.dart';
-import '../properties/properties.dart';
+import '../../services/property_map.dart';
+import '../shared/dashboard_widgets.dart' show monthLabel;
+import 'rent_change_form.dart';
 import 'rental_account.dart';
 import 'research_records.dart' show isoDay;
 
@@ -36,6 +38,15 @@ class SimpleRentalDetails extends StatelessWidget {
           '${p.name} · ${p.fullAddress}',
           style: const TextStyle(color: Palette.muted),
         ),
+        if (!owner)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => perform(context, () => openPropertyMap(p)),
+              icon: const Icon(Icons.location_on_outlined),
+              label: const Text('Open address in Google Maps'),
+            ),
+          ),
         gap(20),
         panel(
           Column(
@@ -130,30 +141,7 @@ class SimpleRentalDetails extends StatelessWidget {
             title: 'Monthly rent',
             subtitle: 'Due on the 1st · agreed changes and dates',
             children: [
-              if (owner && t.endedOn == null)
-                InlineRentalForm(
-                  fields: const {
-                    'period': 'Effective month (YYYY-MM)',
-                    'amount': 'New monthly rent (rand)',
-                    'evidence': 'Agreed change / notice reference',
-                  },
-                  initial: {
-                    'period': periodOf(
-                      DateTime(DateTime.now().year, DateTime.now().month + 1),
-                    ),
-                  },
-                  label: 'Save rent change',
-                  save: (v, id) async {
-                    periodDate(v['period']!);
-                    await s.researchAction('rent_term', {
-                      'tenancyId': t.id,
-                      'period': v['period'],
-                      'amountCents': parseMoney(v['amount']!),
-                      'dueDay': 1,
-                      'evidence': v['evidence'],
-                    });
-                  },
-                ),
+              if (owner && t.endedOn == null) RentChangeForm(tenancyId: t.id),
               gap(16),
               const Text(
                 'Rent changes',
@@ -167,7 +155,7 @@ class SimpleRentalDetails extends StatelessWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    '${r['period']} · ${money(r['amountCents'])} / month',
+                    '${monthLabel(r['period'])} · ${money(r['amountCents'])} / month',
                   ),
                   subtitle: Text(r['evidence'] ?? 'Agreed rent'),
                 ),
@@ -187,7 +175,7 @@ class SimpleRentalDetails extends StatelessWidget {
               'Landlord',
               '${s.landlordFor(t).name} · ${s.landlordFor(t).phone}',
             ),
-            detail('Due day', '${rate?['dueDay'] ?? t.dueDay} of each month'),
+            detail('Monthly rent due', '1st of every month'),
             if (t.utilities.isNotEmpty)
               detail('Water and electricity', t.utilities),
             if (t.houseRules.isNotEmpty)
@@ -201,11 +189,6 @@ class SimpleRentalDetails extends StatelessWidget {
                   child: const Text('Edit agreement details'),
                 ),
               ),
-            TextButton(
-              onPressed: () =>
-                  open(context, PropertyDetailsScreen(propertyId: p.id)),
-              child: const Text('Property and location'),
-            ),
             const Text(
               'This record is not a signed lease.',
               style: TextStyle(color: Palette.muted, fontSize: 12),

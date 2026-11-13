@@ -32,6 +32,7 @@ enum ReviewState { pending, confirmed, rejected, reversed }
 class Account {
   final String id, name, phone, email, salt, passwordHash;
   final Role role;
+  final String? loginId;
   const Account({
     required this.id,
     required this.name,
@@ -40,6 +41,7 @@ class Account {
     required this.salt,
     required this.passwordHash,
     required this.role,
+    this.loginId,
   });
   factory Account.fromJson(Map<String, dynamic> j) => Account(
     id: j['id'],
@@ -49,6 +51,7 @@ class Account {
     salt: j['salt'],
     passwordHash: j['passwordHash'],
     role: Role.values.byName(j['role']),
+    loginId: j['loginId'],
   );
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -58,6 +61,7 @@ class Account {
     'salt': salt,
     'passwordHash': passwordHash,
     'role': role.name,
+    if (loginId != null) 'loginId': loginId,
   };
 }
 
@@ -326,6 +330,7 @@ extension PaymentAllocationTotals on RentPayment {
 
 class AppNotice {
   final String id, userId, title, message;
+  final String? targetKind, targetId, tenancyId;
   final DateTime createdAt;
   final bool read;
   const AppNotice({
@@ -335,6 +340,9 @@ class AppNotice {
     required this.message,
     required this.createdAt,
     this.read = false,
+    this.targetKind,
+    this.targetId,
+    this.tenancyId,
   });
   factory AppNotice.fromJson(Map<String, dynamic> j) => AppNotice(
     id: j['id'],
@@ -342,7 +350,10 @@ class AppNotice {
     title: j['title'],
     message: j['message'],
     createdAt: DateTime.parse(j['createdAt']),
-    read: j['read'],
+    read: j['read'] == true,
+    targetKind: j['targetKind'] as String?,
+    targetId: j['targetId'] as String?,
+    tenancyId: j['tenancyId'] as String?,
   );
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -351,6 +362,9 @@ class AppNotice {
     'message': message,
     'createdAt': createdAt.toIso8601String(),
     'read': read,
+    'targetKind': targetKind,
+    'targetId': targetId,
+    'tenancyId': tenancyId,
   };
 }
 

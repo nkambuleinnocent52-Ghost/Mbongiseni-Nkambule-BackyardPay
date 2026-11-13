@@ -46,6 +46,38 @@ class AppStore extends ChangeNotifier {
   List<Map<String, dynamic>> rentTerms = [],
       caseRecords = [],
       depositPaymentReports = [];
+  int agreementDefaultsVersion = 0;
+  List<Map<String, dynamic>> propertyAgreements = [];
+  Map<String, dynamic> agreementDefaultsFor(String propertyId) =>
+      Map<String, dynamic>.from(
+        propertyAgreements
+                .where((r) => r['propertyId'] == propertyId)
+                .firstOrNull?['details'] ??
+            const {},
+      );
+  Future<void> savePropertyAgreement(
+    String propertyId,
+    Map<String, String> details,
+  ) async {
+    if (cloud != null) {
+      await _remote('property_agreement', {
+        'propertyId': propertyId,
+        'details': details,
+      });
+      return;
+    }
+    _user(Role.landlord);
+    property(propertyId);
+    await _transaction(() {
+      propertyAgreements.removeWhere((r) => r['propertyId'] == propertyId);
+      propertyAgreements.add({
+        'propertyId': propertyId,
+        'details': details,
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+    });
+  }
+
   ResearchLedger get research => ResearchLedger(rentTerms, caseRecords);
   bool get researchReady => researchVersion >= 2;
   Future<dynamic> researchAction(String op, Map<String, dynamic> args) {
@@ -133,6 +165,8 @@ class AppStore extends ChangeNotifier {
     'researchVersion': researchVersion,
     'depositRemindersVersion': depositRemindersVersion,
     'depositReminderScheduler': depositReminderScheduler,
+    'agreementDefaultsVersion': agreementDefaultsVersion,
+    'propertyAgreements': propertyAgreements,
     'rentTerms': rentTerms,
     'caseRecords': caseRecords,
     'depositPaymentReports': depositPaymentReports,
@@ -150,6 +184,10 @@ class AppStore extends ChangeNotifier {
     depositReminderScheduler = j['depositReminderScheduler'] == true;
     simpleRentalsVersion = j['simpleRentalsVersion'] ?? 0;
     researchVersion = j['researchVersion'] ?? 0;
+    agreementDefaultsVersion = j['agreementDefaultsVersion'] ?? 0;
+    propertyAgreements = (j['propertyAgreements'] as List? ?? [])
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
     depositPaymentReports = (j['depositPaymentReports'] as List? ?? [])
         .map((r) => Map<String, dynamic>.from(r))
         .toList();
@@ -317,6 +355,7 @@ class AppStore extends ChangeNotifier {
         salt: salt,
         passwordHash: actualHash,
         role: role,
+        loginId: _newLoginId(),
       );
       _accounts.add(account);
       if (property != null) {
@@ -354,12 +393,32 @@ class AppStore extends ChangeNotifier {
       throw ArgumentError('Use a room number without leading zeros.');
   }
 
+  String _newLoginId() {
+    final random = Random.secure();
+    while (true) {
+      final candidate = (100000000 + random.nextInt(900000000)).toString();
+      if (!_accounts.any((account) => account.loginId == candidate))
+        return candidate;
+    }
+  }
+
+  Future<bool> loginIdsAvailable() async =>
+      cloud == null ? true : cloud!.loginIdsAvailable();
+
   Future<void> login(String email, String password, Role role) async {
     if (cloud != null) {
-      await cloud!.client.auth.signInWithPassword(
-        email: email.trim().toLowerCase(),
-        password: password,
-      );
+      final identifier = email.trim();
+      if (identifier.contains('@')) {
+        await cloud!.client.auth.signInWithPassword(
+          email: identifier.toLowerCase(),
+          password: password,
+        );
+      } else {
+        final id = identifier.replaceAll(RegExp(r'[ -]'), '');
+        if (!RegExp(r'^[1-9][0-9]{8}$').hasMatch(id))
+          throw ArgumentError('Enter your email or nine-digit Login ID.');
+        await cloud!.signInWithLoginId(id, password);
+      }
       try {
         await refresh();
         if (currentUser?.role != role)
@@ -373,14 +432,23 @@ class AppStore extends ChangeNotifier {
       return;
     }
     final account = _accounts
-        .where((a) => a.email == email.trim().toLowerCase() && a.role == role)
+        .where(
+          (a) =>
+              (a.email == email.trim().toLowerCase() ||
+                  a.loginId != null &&
+                      a.loginId ==
+                          email.trim().replaceAll(RegExp(r'[ -]'), '')) &&
+              a.role == role,
+        )
         .firstOrNull;
     if (account == null ||
         !_equal(
           await _password(password, account.salt),
           account.passwordHash,
         )) {
-      throw ArgumentError('The email, password or selected role is incorrect.');
+      throw ArgumentError(
+        'The email / Login ID, password or selected role is incorrect.',
+      );
     }
     await _transaction(() => _session = account.id);
   }
@@ -426,6 +494,7 @@ class AppStore extends ChangeNotifier {
         salt: a.salt,
         passwordHash: a.passwordHash,
         role: a.role,
+        loginId: a.loginId,
       );
     });
   }
@@ -459,6 +528,7 @@ class AppStore extends ChangeNotifier {
         salt: salt,
         passwordHash: actualHash,
         role: a.role,
+        loginId: a.loginId,
       );
     });
   }
@@ -560,6 +630,9 @@ class AppStore extends ChangeNotifier {
         message: n.message,
         createdAt: n.createdAt,
         read: true,
+        targetKind: n.targetKind,
+        targetId: n.targetId,
+        tenancyId: n.tenancyId,
       );
     });
   }
@@ -726,7 +799,7 @@ class AppStore extends ChangeNotifier {
               p.state == ReviewState.pending &&
               p.splits.any((a) => a.period == period),
         ))
-      return 'Awaiting reconciliation';
+      return 'Pending';
     if (paid >= due) return 'Paid';
     return paid > 0 ? 'Partially paid' : 'Outstanding';
   }
@@ -1028,6 +1101,22 @@ class AppStore extends ChangeNotifier {
     }
     _user(Role.landlord);
     final t = tenancy(tenancyId);
+    final recordedStart =
+        t.leaseStart ??
+        (t.record['tenancyStartedOn'] == null
+            ? periodDate(t.startPeriod)
+            : DateTime.parse(t.record['tenancyStartedOn']));
+    if (researchReady &&
+        (start.year != recordedStart.year ||
+            start.month != recordedStart.month ||
+            start.day != recordedStart.day))
+      throw ArgumentError('Move-in date is fixed from tenant onboarding.');
+    if (researchReady &&
+        t.depositCents != null &&
+        depositCents != t.depositCents)
+      throw ArgumentError(
+        'The security deposit is fixed from tenant onboarding.',
+      );
     final current = DateTime.now();
     if (start.year < 2020 ||
         start.isAfter(
@@ -1109,6 +1198,10 @@ class AppStore extends ChangeNotifier {
         emergencyName: emergencyName.trim(),
         emergencyPhone: emergencyPhone.trim(),
         termsUpdatedAt: DateTime.now(),
+        record: {...t.record, ...details},
+        endedOn: t.endedOn,
+        invitation: t.invitation,
+        ledgerVersion: t.ledgerVersion,
       );
       _notice(
         t.userId,

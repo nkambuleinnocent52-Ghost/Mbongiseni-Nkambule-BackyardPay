@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const crypto=require('node:crypto');
 const dir=process.env.EVIDENCE_DIR || '/tmp/backyardpay-cloud-evidence';fs.mkdirSync(dir,{recursive:true});
-const users=[], properties=[], tenancies=[], payments=[], notices=[], cases=[], depositPaymentReports=[];
+const users=[], properties=[], tenancies=[], payments=[], notices=[], cases=[], depositPaymentReports=[], propertyAgreements=[];
 let clockOffsetMs=0;
 const now=()=>new Date(Date.now()+clockOffsetMs).toISOString();
 const jwt=u=>`${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({sub:u.id,exp:Math.floor((Date.now()+clockOffsetMs)/1000)+3600})).toString('base64url')}.test-only`;
@@ -15,7 +15,7 @@ const snapshot=u=>{
  const ps=properties.filter(p=>p.landlordId===u.id || tenancies.some(t=>t.userId===u.id && t.propertyId===p.id));
  const ts=tenancies.filter(t=>t.userId===u.id || ps.some(p=>p.id===t.propertyId && p.landlordId===u.id));
  const ids=new Set([u.id,...ts.map(t=>t.userId),...ps.map(p=>p.landlordId)]);
- return {version:1,researchVersion:2,prorationVersion:1,depositReportsVersion:1,advanceRentVersion:1,depositPaymentsVersion:1,depositRemindersVersion:1,depositReminderScheduler:false,fixedRentalPolicyVersion:1,depositPaymentReports:depositPaymentReports.filter(r=>ts.some(t=>t.id===r.tenancyId)),rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
+ return {version:1,researchVersion:2,agreementDefaultsVersion:1,noticeRoutesVersion:1,paymentIntentVersion:1,propertyAgreements:propertyAgreements.filter(r=>ps.some(p=>p.id===r.propertyId)),prorationVersion:1,depositReportsVersion:1,advanceRentVersion:1,depositPaymentsVersion:1,depositRemindersVersion:1,depositReminderScheduler:false,fixedRentalPolicyVersion:1,depositPaymentReports:depositPaymentReports.filter(r=>ts.some(t=>t.id===r.tenancyId)),rentTerms:ts.map(t=>({tenancyId:t.id,period:t.startPeriod,amountCents:t.rentCents,dueDay:t.dueDay})),caseRecords:cases.filter(r=>ts.some(t=>t.id===r.tenancyId)),session:u.id,accounts:users.filter(a=>ids.has(a.id)).map(({password,...a})=>a),properties:ps,tenancies:ts,payments:payments.filter(p=>ts.some(t=>t.id===p.tenancyId)),notices:notices.filter(n=>n.userId===u.id)};
 };
 let browser;
 let recoveryEmail;
@@ -27,6 +27,7 @@ let recoveryEmail;
   await context.route('https://zmxxgetndtcyuwzwwjbd.supabase.co/**',async route=>{
    const req=route.request(),path=new URL(req.url()).pathname,body=req.postDataJSON()||{};
    const reply=data=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
+   if(path.endsWith('/bp_login_id_enabled'))return reply(false);
    if(path.endsWith('/bp_tenant_signup_mode'))return reply('invitation_only');
    if(path.endsWith('/signup')){
     const u={id:crypto.randomUUID(),email:body.email,password:body.password,...body.data,salt:'',passwordHash:''};users.push(u);
@@ -51,6 +52,8 @@ let recoveryEmail;
     if(body.operation==='property'){
      result=crypto.randomUUID();properties.push({...a,id:result,landlordId:u.id,roomRents:{},code:'BP-CONTRACT-TEST',latitude:null,longitude:null});
     } else if(body.operation==='room_rents'){const p=properties.find(p=>p.id===a.propertyId);p.roomRents=a.rates;result=p.id;
+    } else if(body.operation==='read'){const n=notices.find(n=>n.id===a.id);if(n)n.read=true;result=a.id;
+    } else if(body.operation==='property_agreement'){propertyAgreements.push({propertyId:a.propertyId,details:a.details,updatedAt:now()});result=a.propertyId;
     } else if(body.operation==='property_message'){result=1;notices.push({id:crypto.randomUUID(),userId:tenancies[0].userId,title:'Property update',message:a.message,createdAt:now(),read:false});
 
     } else if(body.operation==='deposit_update'){result=a.eventId;cases.push({id:result,tenancyId:a.tenancyId,kind:'deposit',body:a.body,actor:u.id,createdAt:now()});
@@ -64,13 +67,13 @@ let recoveryEmail;
     } else if(body.operation==='tenancy'){
      const p=properties.find(p=>p.id===a.propertyId);assert(p);result=crypto.randomUUID();
      const moveIn=new Date(a.start+'T00:00:00Z');moveIn.setUTCDate(moveIn.getUTCDate()+10);const depositDueOn=moveIn.toISOString().slice(0,10);
-     tenancies.push({id:result,userId:'',propertyId:p.id,room:String(a.room),startPeriod:a.start.slice(0,7),rentCents:p.roomRents[String(a.room)]??p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,invitation:'JOIN-'+crypto.randomUUID().replaceAll('-','').toUpperCase(),record:{firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:a.start,depositDueOn,depositDeadlinePolicy:'move_in_plus_10'}});
+     tenancies.push({id:result,userId:'',propertyId:p.id,room:String(a.room),startPeriod:a.start.slice(0,7),rentCents:p.roomRents[String(a.room)]??p.rentCents,dueDay:p.dueDay,ledgerVersion:2,depositCents:p.securityDepositCents,depositReceivedCents:0,invitation:'JOIN-'+crypto.randomUUID().replaceAll('-','').toUpperCase(),record:{...(propertyAgreements.find(r=>r.propertyId===p.id)?.details||{}),firstMonthProration:p.prorateFirstMonth?'actual_days':'full_month',tenancyStartedOn:a.start,depositDueOn,depositDeadlinePolicy:'move_in_plus_10'}});
     } else if(body.operation==='payment'){
      result=crypto.randomUUID();payments.push({...a,id:result,period:a.paidOn.slice(0,7),state:'pending',submittedAt:now()});
     } else if(body.operation==='review'){
      const p=payments.find(p=>p.id===a.id);assert(p);result=p.id;p.state=a.confirm?'confirmed':'rejected';p.reviewedAt=now();if(a.allocations)p.allocations=a.allocations;p.receiptDetails={tenant:'Tenant Test',landlord:'Owner Test',landlordAddress:'1 Owner Street',property:'My Real Rooms',address:'1 Test Street, Southernwood, East London, 5201',room:'1',issuedAllocations:p.allocations,issuedCreditCents:0};
-     const t=tenancies.find(t=>t.id===p.tenancyId);notices.push({id:crypto.randomUUID(),userId:t.userId,title:'Payment confirmed',message:'Receipt available',createdAt:now(),read:false});
-    } else if(body.operation==='case'){result=a.eventId;cases.push({id:result,tenancyId:a.tenancyId,kind:a.kind,body:{...a.body,...(['repair','query'].includes(a.kind)?{status:'open'}:{})},actor:u.id,createdAt:now()});
+     const t=tenancies.find(t=>t.id===p.tenancyId);notices.push({id:crypto.randomUUID(),userId:t.userId,title:'Payment confirmed',message:'Rent receipt available',targetKind:'rent_payment',targetId:p.id,tenancyId:t.id,createdAt:now(),read:false});
+    } else if(body.operation==='case'){result=a.eventId;cases.push({id:result,tenancyId:a.tenancyId,kind:a.kind,body:{...a.body,...(['repair','query'].includes(a.kind)?{status:'open'}:{})},actor:u.id,createdAt:now()});const t=tenancies.find(t=>t.id===a.tenancyId);notices.push({id:crypto.randomUUID(),userId:u.role==='tenant'?properties.find(p=>p.id===t.propertyId).landlordId:t.userId,title:'Problem update',message:'Tenant Test · Room 1 · '+(a.body.description||a.body.message),targetKind:'issue',targetId:a.kind==='case_update'?a.body.parentId:result,tenancyId:t.id,createdAt:now(),read:false});
     } else throw Error('Unexpected command: '+body.operation);
     return reply({result});
    }
@@ -114,6 +117,7 @@ let recoveryEmail;
  for(const [name,value] of [['Property name','My Real Rooms'],['Street address / stand number','1 Test Street'],['Suburb / area','Southernwood'],['Town / city','East London'],['Postal code (4 digits)','5201'],['Total rooms','2'],['Security deposit per new tenancy (rand; 0 if none)','2000']])await fill(owner,name,value);
  assert.equal(await owner.getByRole('textbox',{name:/Due day/}).count(),0,'Rent day is fixed rather than chosen on the property form');
  await button(owner,'Save');await owner.getByText('My Real Rooms',{exact:false}).waitFor();assert.equal(properties[0].dueDay,1,'New property rent is due on the first');await owner.getByText('My Real Rooms',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
+ await button(owner,'Property terms');for(const [label,value] of [['Landlord address for written notices','1 Owner Street'],['Your authority to rent out this property','Owner'],['Shared spaces and access','Shared yard and gate'],['How tenants should pay','Cash or EFT, use room number'],['Water and electricity responsibilities','Water included'],['House rules','Keep the yard clear'],['Notice to end the rental','Record written notice under the rental agreement'],['Terms for future rent changes','Changes require the agreement and required notice'],['Other charges','None']]){const f=owner.getByRole('textbox',{name:label,exact:true});await reveal(owner,f);await fill(owner,label,value);}await button(owner,'Save property terms');assert.equal(propertyAgreements.length,1);await owner.screenshot({path:dir+'/property-terms-saved.png'});
  await expand(owner,'Room rent');await owner.getByRole('checkbox',{name:'Room 1',exact:true}).evaluate(e=>e.click());await fill(owner,'Monthly rent for selected rooms (rand)','1800');await button(owner,'Save room rent');assert.equal(properties[0].roomRents['1'],180000);await button(owner,'Back');await button(owner,'Back');
  await button(owner,'Add tenant record');await button(owner,'Enter tenant details');await fill(owner,'Tenant full name','Tenant Test');
  const room=owner.getByRole('button',{name:'Available room',exact:true});
@@ -121,10 +125,10 @@ let recoveryEmail;
  await owner.getByRole('menuitem',{name:'Room 1',exact:true}).evaluate(e=>e.click());
  await button(owner,'Save');await button(owner,'Back');
  await owner.screenshot({path:dir+'/simple-landlord-home.png'});
- const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');await tenant.screenshot({path:dir+'/simple-tenant-home.png'});
+ const tenant=await make();await register(tenant,'TENANT','tenant@contract.test');await tenant.reload();await tenant.locator('flt-semantics-placeholder').waitFor();await tenant.locator('flt-semantics-placeholder').evaluate(e=>e.click());await tenant.getByText('Tenant dashboard',{exact:true}).waitFor();await tenant.screenshot({path:dir+'/simple-tenant-home.png'});
  await tenant.setViewportSize({width:390,height:844});await tenant.screenshot({path:dir+'/simple-tenant-home-phone.png'});await tenant.setViewportSize({width:1440,height:1000});
- const today=new Date(),monthDays=new Date(today.getUTCFullYear(),today.getUTCMonth()+1,0).getUTCDate();const firstCents=Math.round(180000*(monthDays-today.getUTCDate()+1)/monthDays);const paymentLabel=`Tenant Test • R ${(firstCents/100).toFixed(2)}`;
- await button(tenant,'Record payment');assert.equal(await tenant.getByRole('checkbox').count(),0);await tenant.screenshot({path:dir+'/plain-payment-tenant.png'});await button(tenant,'Submit payment');await tenant.getByText(/^PENDING$/).first().waitFor();
+ const today=new Date(),monthDays=new Date(today.getUTCFullYear(),today.getUTCMonth()+1,0).getUTCDate();const firstCents=Math.round(180000*(monthDays-today.getUTCDate()+1)/monthDays);const paymentLabel=`Tenant Test • R ${((firstCents+80000)/100).toFixed(2)}`;
+ await button(tenant,'Record payment');await fill(tenant,'How much did you pay? (rand)',((firstCents+80000)/100).toFixed(2));assert.equal(await tenant.getByRole('checkbox').count(),0);await tenant.screenshot({path:dir+'/plain-payment-tenant.png'});await button(tenant,'Submit payment');await tenant.getByText(/^PENDING$/).first().waitFor();assert.equal(payments[0].allocations.length,2);assert.equal(payments[0].allocations[1].amountCents,80000);
  await button(owner,'Refresh records');await button(owner,'My properties');const propertyTile=owner.getByText('My Real Rooms',{exact:false}).first();for(let i=0;i<16;i++){const b=await propertyTile.count()?await propertyTile.boundingBox():null;if(b&&b.y>=0&&b.y+b.height<=1000)break;await owner.mouse.move(1050,700);await owner.mouse.wheel(0,b&&b.y<0?-650:650);await owner.waitForTimeout(120);}await propertyTile.click();await owner.waitForTimeout(350);
  await owner.getByText('Room 1: Unavailable',{exact:false}).first().waitFor();await owner.getByText('Room 2: Available',{exact:false}).first().waitFor();await owner.screenshot({path:dir+'/room-availability.png'});
  await button(owner,'Back');await button(owner,'Back');await button(owner,'Payment records');await owner.getByText(paymentLabel,{exact:false}).click();
@@ -141,9 +145,9 @@ let recoveryEmail;
  // Paying a later rental month must be available without charging it as current debt.
  const nextDate=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth()+1,1));
  const nextPeriod=nextDate.toISOString().slice(0,7),nextLabel=new Intl.DateTimeFormat('en-GB',{month:'short',year:'numeric',timeZone:'UTC'}).format(nextDate);
- const futurePaymentLabel='Tenant Test • R 1800.00';
+ const futurePaymentLabel='Tenant Test • R 1000.00';
  await button(tenant,'Record payment');await choose(tenant,'Month paid for',nextLabel);
- const advanceAmount=tenant.getByRole('textbox',{name:'How much did you pay? (rand)',exact:true});await advanceAmount.click();await tenant.waitForTimeout(150);assert.equal(await advanceAmount.inputValue(),'1800.00');
+ const advanceAmount=tenant.getByRole('textbox',{name:'How much did you pay? (rand)',exact:true});await advanceAmount.click();await tenant.waitForTimeout(150);assert.equal(await advanceAmount.inputValue(),'1000.00');
  await tenant.screenshot({path:dir+'/advance-rent-report.png'});await button(tenant,'Submit payment');
  assert.equal(payments.length,2);assert.equal(payments[1].allocations[0].period,nextPeriod);assert.equal(payments[1].state,'pending');
  await button(owner,'Back to dashboard');await button(owner,'Refresh records');await button(owner,'Payment records');await owner.getByText(futurePaymentLabel,{exact:false}).first().click();await confirmRent(owner);
@@ -179,17 +183,18 @@ let recoveryEmail;
  assert((await semantics(tenant)).includes('Rent still due: R 0.00'),'Deposit stays separate from rent balance');
  assert.equal(await tenant.getByRole('button',{name:'Report a deposit payment',exact:true}).count(),0,'Confirmed deposit no longer has a payment reminder');assert(!(await semantics(tenant)).includes('Deposit payment waiting for review'),'Confirmed receipt clears the reminder banner');await tenant.mouse.move(1050,700);await tenant.mouse.wheel(0,-5000);await tenant.waitForTimeout(250);await tenant.screenshot({path:dir+'/deposit-reminder-cleared.png'});
  await button(tenant,'Report a problem / account query');
- await fill(tenant,'Where is the problem?','Outside shared tap');await fill(tenant,'Describe the issue','Water is leaking continuously from the shared tap. Please arrange an inspection.');await button(tenant,'Send issue');
- await button(owner,'Refresh records');await button(owner,'Tenant reports');
+ await choose(tenant,'Where is the problem?','Shared yard');await fill(tenant,'Describe the issue','Water is leaking continuously from the shared tap. Please arrange an inspection.');await button(tenant,'Send issue');
+ await button(owner,'Refresh records');await button(owner,'Notifications');await owner.getByText('Problem update',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(400);assert((await semantics(owner)).includes('Water is leaking'));
+
  assert(cases.some(r=>r.kind==='repair'));await owner.screenshot({path:dir+'/report-before-ack.png'});fs.writeFileSync(dir+'/report-semantics.json',JSON.stringify(await owner.locator('[role]').evaluateAll(es=>es.map(e=>({role:e.getAttribute('role'),label:e.getAttribute('aria-label'),text:e.innerText}))),null,2));
- await owner.getByRole('checkbox',{name:/Noted by landlord/}).evaluate(e=>e.click());await owner.waitForTimeout(350);
+ await button(owner,'Acknowledge issue');await button(owner,'Mark in progress');await owner.waitForTimeout(350);
  assert(cases.some(r=>r.kind==='case_update'&&r.body.status==='in_progress'));
- await expand(owner,'Reply / send update');await fill(owner,'Update message','Plumber contacted; agreeing access with the tenant.');await button(owner,'Send update');
+ await fill(owner,'Update message','Plumber contacted; agreeing access with the tenant.');await button(owner,'Send update');
  assert.equal(tenancies[0].depositCents,200000);assert.equal(payments.length,2,'Issue and deposit report created no extra rent payment');
  await owner.screenshot({path:dir+'/report-followup.png'});
  await owner.getByRole('switch').evaluate(e=>e.click());await fill(owner,'Update message','Shared pipe repairs are booked for noon.');await button(owner,'Send update');assert(notices.some(n=>n.message==='Shared pipe repairs are booked for noon.'));
  await button(owner,'Mark resolved');assert(cases.some(r=>r.kind==='case_update'&&r.body.status==='resolved'));
- await button(owner,'Back');await button(owner,'My tenants');await owner.getByText('Tenant Test',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
+ await button(owner,'Back');await button(owner,'Overview');await button(owner,'My tenants');await owner.getByText('Tenant Test',{exact:false}).first().evaluate(e=>e.click());await owner.waitForTimeout(350);
  assert.equal(await owner.getByRole('button',{name:'Rental documents / supporting files',exact:true}).count(),0);
  await expand(owner,'Security deposit');assert(await owner.getByRole('checkbox',{name:/Deposit received/}).first().isChecked());assert.equal(cases.filter(r=>r.kind==='deposit'&&r.body.event==='received').length,1,'Checking an already confirmed deposit must not record it twice');
  await expand(owner,'Deposit deadline');assert.equal(await owner.getByRole('button',{name:'Save agreed due date',exact:true}).count(),0);assert.equal(await owner.getByRole('textbox',{name:'Agreed deposit due date (YYYY-MM-DD)',exact:true}).count(),0);const deadlineLabel=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',timeZone:'Africa/Johannesburg'}).format(reminderTime);assert((await semantics(owner)).includes(deadlineLabel),'Readonly deadline is move-in plus ten days');
@@ -199,8 +204,8 @@ let recoveryEmail;
  await owner.setViewportSize({width:390,height:844});await owner.screenshot({path:dir+'/simple-rental-phone.png'});await owner.setViewportSize({width:1440,height:1000});
 
  await button(tenant,'Back');await button(tenant,'Refresh records');await button(tenant,'Report a problem / account query');
- assert(await tenant.getByRole('checkbox',{name:/Noted by landlord/}).isChecked());
- await button(tenant,'Back');await button(tenant,'Profile');await button(tenant,'Logout');await button(tenant,'GET STARTED');await button(tenant,'TENANT');await button(tenant,'Forgot password?');
+ assert((await semantics(tenant)).includes('Resolved'));await expand(tenant,'Water is leaking');assert((await semantics(tenant)).includes('Acknowledged by landlord'));
+ await button(tenant,'Back');await button(tenant,'Log out');await tenant.getByRole('menuitem',{name:'Log out',exact:true}).click();await button(tenant,'GET STARTED');await button(tenant,'TENANT');await button(tenant,'Forgot password?');
  await fill(tenant,'Email','tenant@contract.test');await button(tenant,'Send reset link');
  assert.equal(recoveryEmail,'tenant@contract.test');
  await tenant.goto((process.env.APP_URL||'http://127.0.0.1:8080/')+'?code=test-only-recovery');

@@ -36,4 +36,4 @@ The role dashboards and rental components are independent Dart libraries with ex
 
 Flutter compiles these files into `main.dart.js` for browsers. That generated filename does not mean the source is one page. Edit Dart source and rebuild; do not edit the generated JavaScript.
 
-Use `BackyardPay-Netlify-source.zip` for editing/submission and `BackyardPay-Netlify-web.zip` for Netlify deployment. Version 1.4.0 is a UI/source organisation update and needs no additional SQL if the previous payment-rule migrations are already installed.
+Use `BackyardPay-Netlify-source.zip` for editing/submission and `BackyardPay-Netlify-web.zip` for Netlify deployment. Version 1.5.0 adds shared property terms, actionable notifications and protected payment proposals. Existing installations must apply the Review update SQL before deployment. Optional Login ID deployment is documented separately.

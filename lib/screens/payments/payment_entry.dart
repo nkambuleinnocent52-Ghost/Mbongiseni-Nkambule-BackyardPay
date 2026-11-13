@@ -1,4 +1,5 @@
 import '../../data/rent_payment_months.dart';
+import '../../data/rent_payment_plan.dart';
 import 'deposit_payments.dart';
 import '../shared/dashboard.dart' show monthLabel;
 
@@ -34,6 +35,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
       date = TextEditingController();
   final periods = <String>[], allocated = <TextEditingController>[];
   bool ready = false, busy = false, received = false;
+  bool manualSplit = false, someoneElsePaid = false;
   String method = 'Cash';
   String? error;
   @override
@@ -67,19 +69,82 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
         DateTime.now(),
       ).where((m) => s.expected(t, m) > 0).toList();
       periods.add(
-        choices.where((m) => s.outstanding(t, m) > 0).firstOrNull ??
+        choices.where((m) => availableToReport(m) > 0).firstOrNull ??
             choices.lastOrNull ??
             periodOf(DateTime.now()),
       );
       allocated.add(
         TextEditingController(
-          text: (s.outstanding(t, periods.first) / 100).toStringAsFixed(2),
+          text: (availableToReport(periods.first) / 100).toStringAsFixed(2),
         ),
       );
     }
     if (p == null && !widget.credit && allocated.isNotEmpty)
       amount.text = allocated.first.text;
     ready = true;
+  }
+
+  int availableToReport(String month) {
+    final store = StoreScope.of(context), t = store.tenancy(widget.tenancyId);
+    final pending = store.payments
+        .where(
+          (p) =>
+              p.tenancyId == t.id &&
+              p.state == ReviewState.pending &&
+              p.id != widget.paymentId,
+        )
+        .fold(
+          0,
+          (sum, p) =>
+              sum +
+              p.splits
+                  .where((a) => a.period == month)
+                  .fold(0, (n, a) => n + a.amountCents),
+        );
+    return (store.outstanding(t, month) - pending).clamp(0, 2147483647);
+  }
+
+  void suggestMonths() {
+    if (manualSplit ||
+        widget.paymentId != null ||
+        widget.credit ||
+        periods.isEmpty)
+      return;
+    final store = StoreScope.of(context), t = store.tenancy(widget.tenancyId);
+    final first = periods.first;
+    int total;
+    try {
+      total = parseMoney(amount.text);
+    } catch (_) {
+      return;
+    }
+    final plan = proposeRentPayment(
+      amountCents: total,
+      firstPeriod: first,
+      allowedMonths: rentPaymentMonths(t, DateTime.now()),
+      amountStillToReport: availableToReport,
+    );
+    // Retire controllers after the old fields leave the widget tree.
+    final retired = List<TextEditingController>.of(allocated);
+    periods.clear();
+    allocated.clear();
+    for (final part in plan) {
+      periods.add(part.period);
+      allocated.add(
+        TextEditingController(
+          text: (part.amountCents / 100).toStringAsFixed(2),
+        ),
+      );
+    }
+    if (periods.isEmpty) {
+      periods.add(first);
+      allocated.add(TextEditingController(text: '0.00'));
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final control in retired) {
+        control.dispose();
+      }
+    });
   }
 
   @override
@@ -178,14 +243,32 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
     child: TextFormField(
       controller: c,
       enabled: !busy && edit,
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: c != date || !edit
+            ? null
+            : IconButton(
+                tooltip: 'Choose payment date',
+                icon: const Icon(Icons.calendar_today_outlined),
+                onPressed: busy
+                    ? null
+                    : () async {
+                        final today = DateUtils.dateOnly(DateTime.now());
+                        final parsed = DateTime.tryParse(date.text) ?? today;
+                        final chosen = await showDatePicker(
+                          context: context,
+                          initialDate: parsed.isAfter(today) ? today : parsed,
+                          firstDate: DateTime(2020),
+                          lastDate: today,
+                        );
+                        if (chosen != null && mounted)
+                          setState(() => date.text = isoDay(chosen));
+                      },
+              ),
+      ),
       maxLines: multiline ? 3 : 1,
       onChanged: (_) {
-        if (c == amount &&
-            periods.length == 1 &&
-            widget.paymentId == null &&
-            !widget.credit)
-          allocated.first.text = amount.text;
+        if (c == amount) suggestMonths();
         setState(() {});
       },
       validator: optional ? null : requiredField,
@@ -205,6 +288,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
     }
     months.sort();
     final p = widget.paymentId == null ? null : s.payment(widget.paymentId!);
+    final reviewing = p != null && !widget.credit;
     int? remaining;
     try {
       remaining =
@@ -221,6 +305,11 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
           : 'Report a payment',
       maxWidth: 800,
       children: [
+        Text(
+          'Rent · ${s.tenantAccount(t).name} · Room ${t.room}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        gap(12),
         if (!owner && p == null && !widget.credit)
           PaymentPurpose(tenancyId: t.id, deposit: false),
         panel(
@@ -275,15 +364,28 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                     'Bank payment reference (from your banking app)',
                     edit: p == null,
                   ),
+                if (p == null)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Someone else paid'),
+                    value: someoneElsePaid,
+                    onChanged: busy
+                        ? null
+                        : (value) => setState(() {
+                            someoneElsePaid = value;
+                            if (!value) payer.text = s.tenantAccount(t).name;
+                          }),
+                  ),
+                if (p == null && someoneElsePaid)
+                  field(payer, 'Name of the person who paid'),
+                if (p != null &&
+                    p.payer.isNotEmpty &&
+                    p.payer != s.tenantAccount(t).name)
+                  detail('Paid by', p.payer),
                 ExpansionTile(
-                  title: const Text('Payment details (optional)'),
+                  title: const Text('Payment reference'),
                   tilePadding: EdgeInsets.zero,
                   children: [
-                    field(
-                      payer,
-                      'Name of the person who paid',
-                      edit: p == null,
-                    ),
                     field(reference, 'Payment record number', edit: false),
                   ],
                 ),
@@ -302,7 +404,9 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
               Text(
                 !owner && p == null && !widget.credit
                     ? 'Choose the rent month. For a deposit, select Security deposit above.'
-                    : 'Choose the rent month this money covers.',
+                    : p != null
+                    ? 'The tenant chose these rent months. Confirm as reported, or reject it and ask them to correct it.'
+                    : 'Use the rent months requested by the tenant.',
               ),
               gap(12),
               for (var i = 0; i < periods.length; i++)
@@ -332,7 +436,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                                 ),
                               )
                               .toList(),
-                          onChanged: busy
+                          onChanged: busy || reviewing
                               ? null
                               : (v) => setState(() {
                                   periods[i] = v!;
@@ -343,6 +447,7 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                                         .toStringAsFixed(2);
                                     amount.text = due;
                                     allocated[i].text = due;
+                                    suggestMonths();
                                   }
                                 }),
                         ),
@@ -351,14 +456,16 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                       Expanded(
                         child: TextFormField(
                           controller: allocated[i],
-                          enabled: !busy,
+                          enabled: !busy && !reviewing,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
                           decoration: InputDecoration(
                             labelText: 'Amount for this month (rand)',
                           ),
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) => setState(() {
+                            manualSplit = true;
+                          }),
                           validator: (v) {
                             try {
                               centsOrZero(v ?? '');
@@ -369,24 +476,27 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                           },
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Remove ${monthLabel(periods[i])}',
-                        onPressed: busy
-                            ? null
-                            : () => setState(() {
-                                periods.removeAt(i);
-                                allocated.removeAt(i).dispose();
-                              }),
-                        icon: const Icon(Icons.close),
-                      ),
+                      if (!reviewing)
+                        IconButton(
+                          tooltip: 'Remove ${monthLabel(periods[i])}',
+                          onPressed: busy
+                              ? null
+                              : () => setState(() {
+                                  manualSplit = true;
+                                  periods.removeAt(i);
+                                  allocated.removeAt(i).dispose();
+                                }),
+                          icon: const Icon(Icons.close),
+                        ),
                     ],
                   ),
                 ),
-              if (months.any((m) => !periods.contains(m)))
+              if (!reviewing && months.any((m) => !periods.contains(m)))
                 OutlinedButton.icon(
                   onPressed: busy
                       ? null
                       : () => setState(() {
+                          manualSplit = true;
                           periods.add(
                             months.firstWhere(
                               (m) => !periods.contains(m),
@@ -397,6 +507,13 @@ class _ResearchPaymentEntryState extends State<ResearchPaymentEntry> {
                         }),
                   icon: const Icon(Icons.add),
                   label: const Text('Paying for another month? Add it'),
+                ),
+              if (p == null && !manualSplit && periods.length > 1)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Extra money is proposed for the following month. Check the amounts before submitting.',
+                  ),
                 ),
               if (remaining != null && remaining != 0)
                 Padding(

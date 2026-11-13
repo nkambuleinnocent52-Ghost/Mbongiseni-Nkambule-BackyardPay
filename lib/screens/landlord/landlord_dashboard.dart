@@ -90,7 +90,7 @@ class LandlordDashboardScreen extends StatelessWidget {
               '${s.tenantAccount(s.tenancy(p.tenancyId)).name} · ${money(p.amountCents)}',
               Icons.schedule,
               () => open(context, PaymentDetailsScreen(paymentId: p.id)),
-              subtitle: '${p.method} · Waiting for confirmation',
+              subtitle: 'Rent · ${p.method} · Waiting for confirmation',
             ),
         ],
         panel(

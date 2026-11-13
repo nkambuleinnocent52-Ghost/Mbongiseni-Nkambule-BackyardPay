@@ -19,7 +19,20 @@ class _AuthScreenState extends State<AuthScreen> {
     for (final key in ['name', 'email', 'phone', 'password', 'confirm', 'code'])
       key: TextEditingController(),
   };
-  bool registration = false, busy = false;
+  bool registration = false,
+      busy = false,
+      loginIdAvailable = false,
+      availabilityChecked = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (availabilityChecked) return;
+    availabilityChecked = true;
+    StoreScope.of(context).loginIdsAvailable().then((enabled) {
+      if (mounted) setState(() => loginIdAvailable = enabled);
+    });
+  }
+
   String? error;
   @override
   void dispose() {
@@ -76,7 +89,9 @@ class _AuthScreenState extends State<AuthScreen> {
       keyboardType: number
           ? TextInputType.number
           : key == 'email'
-          ? TextInputType.emailAddress
+          ? (registration || !loginIdAvailable
+                ? TextInputType.emailAddress
+                : TextInputType.text)
           : TextInputType.text,
       decoration: InputDecoration(labelText: label),
       validator: (v) {
@@ -109,7 +124,10 @@ class _AuthScreenState extends State<AuthScreen> {
               field('name', 'Full name'),
               field('phone', 'Phone number'),
             ],
-            field('email', 'Email'),
+            field(
+              'email',
+              registration || !loginIdAvailable ? 'Email' : 'Email or Login ID',
+            ),
             field('password', 'Password', secret: true),
             if (registration) ...[
               field('confirm', 'Confirm password', secret: true),

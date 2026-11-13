@@ -4,8 +4,9 @@ import 'room_availability.dart';
 import '../../data/research_ledger.dart';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:url_launcher/url_launcher.dart';
+
+import '../../services/property_map.dart';
+import '../rentals/property_terms.dart';
 
 import '../../models/models.dart';
 import '../shared/common.dart';
@@ -49,7 +50,7 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
     context,
     EditorPage(
       title: property == null ? 'Add property' : 'Edit property',
-      help: 'Monthly rent is due on the 1st. A new tenant pays the one-off security deposit within 10 calendar days of move-in. Set the deposit amount separately from rent (0 if none). Recording these amounts does not record money received.',
+      help: 'Rent is due on the 1st. Set the one-off deposit separately; new tenants have 10 days from move-in to pay it.',
       preview: (context, v) {
         try {
           final cents = parseMoney(v['rent']!);
@@ -125,77 +126,27 @@ void editProperty(BuildContext context, [RentalProperty? property]) {
   );
 }
 
-class PropertyDetailsScreen extends StatefulWidget {
+class PropertyDetailsScreen extends StatelessWidget {
   final String propertyId;
   const PropertyDetailsScreen({super.key, required this.propertyId});
-  @override
-  State<PropertyDetailsScreen> createState() => _PropertyDetailsScreenState();
-}
-
-class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
-  bool locating = false;
-  Future<void> locate() async {
-    final store = StoreScope.of(context);
-    setState(() => locating = true);
-    await perform(context, () async {
-      if (!await Geolocator.isLocationServiceEnabled())
-        throw StateError('Turn on location services and try again.');
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied)
-        permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw StateError(
-          'Location permission was not granted. Allow it in browser/device settings.',
-        );
-      }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-      if (!mounted) return;
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Save this property location?'),
-          content: Text(
-            'Only capture while you are at the property.\n${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}\nEstimated accuracy: ${pos.accuracy.round()} metres',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Save location'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed == true)
-        await store.saveLocation(
-          widget.propertyId,
-          pos.latitude,
-          pos.longitude,
-        );
-    });
-    if (mounted) setState(() => locating = false);
-  }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
-    final p = store.properties
-        .where((p) => p.id == widget.propertyId)
-        .firstOrNull;
+    final p = store.properties.where((p) => p.id == propertyId).firstOrNull;
     if (p == null)
       return const PageShell(title: 'Property removed', children: []);
     final landlord = store.currentUser!.role == Role.landlord;
     return PageShell(
       title: 'Property details',
+      actions: [
+        if (landlord)
+          IconButton(
+            tooltip: 'Edit property',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () => editProperty(context, p),
+          ),
+      ],
       children: [
         heading(p.name),
         if (landlord) RoomAvailability(propertyId: p.id),
@@ -217,7 +168,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              detail('Address', p.fullAddress),
+              TextButton.icon(
+                onPressed: () => perform(context, () => openPropertyMap(p)),
+                icon: const Icon(Icons.location_on_outlined),
+                label: Text(p.fullAddress),
+              ),
               detail('Total rooms', '${p.rooms}'),
               if (landlord)
                 detail(
@@ -245,39 +200,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             ],
           ),
         ),
-        heading('Property location'),
-        if (p.latitude == null)
-          const Text('No device location has been captured yet.')
-        else ...[
-          SelectableText(
-            '${p.latitude!.toStringAsFixed(6)}, ${p.longitude!.toStringAsFixed(6)}',
-          ),
-          action(
-            'View on map',
-            () => perform(context, () async {
-              final uri = Uri.https('www.google.com', '/maps/search/', {
-                'api': '1',
-                'query': '${p.latitude},${p.longitude}',
-              });
-              if (!await launchUrl(uri, mode: LaunchMode.externalApplication))
-                throw StateError('The map could not be opened.');
-            }),
-            icon: Icons.map_outlined,
-          ),
-        ],
         if (landlord) ...[
-          action(
-            locating ? 'Finding your location…' : 'Capture current location',
-            locating ? null : locate,
-            icon: Icons.my_location,
-          ),
-          const Text(
-            'Use HTTPS in the browser and allow location access. Capture only while at your property.',
-          ),
-          action(
-            'Edit property',
-            () => editProperty(context, p),
-            icon: Icons.edit_outlined,
+          TextButton.icon(
+            onPressed: () =>
+                open(context, PropertyTermsScreen(propertyId: p.id)),
+            icon: const Icon(Icons.description_outlined),
+            label: const Text('Property terms'),
           ),
           if (!store.tenancies.any((t) => t.propertyId == p.id))
             TextButton(
