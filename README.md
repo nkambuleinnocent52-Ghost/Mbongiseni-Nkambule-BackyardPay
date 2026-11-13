@@ -8,7 +8,7 @@ The deployed release is **1.5.0 (build 14)**. The application records cash and b
 
 ## Project report — lecturer review
 
-**[Read the updated project report (PDF)](downloads/BackyardPay-Project-Report-231064977.pdf)** · [Word document](downloads/BackyardPay-Project-Report-231064977.docx)
+**[Read the updated project report (PDF)](downloads/Mbongiseni%20Nkambule%20231064977%20Updated%20Version.pdf)** · [Word document](downloads/BackyardPay-Project-Report-231064977.docx)
 
 This is the current project report, updated on 13 November 2026. Development has continued since the original submission: release 1.4.0 had 84 passing Flutter tests, and release 1.5.0 has 105. The report covers the problem, objectives, screenshot manual, selected code, folder structure and references. It retains the original cover page.
 
