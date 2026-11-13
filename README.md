@@ -6,6 +6,12 @@ Rental records for backyard landlords and tenants in East London, Eastern Cape.
 
 The deployed release is **1.5.0 (build 14)**. The application records cash and bank payments; it does not transfer money. Tenant reports remain pending until the landlord confirms receipt. Rent and security deposits are recorded separately.
 
+## Project report — lecturer review
+
+**[Read the updated project report (PDF)](downloads/BackyardPay-Project-Report-231064977.pdf)** · [Word document](downloads/BackyardPay-Project-Report-231064977.docx)
+
+This is the current project report, updated on 13 November 2026. Development has continued since the original submission: release 1.4.0 had 84 passing Flutter tests, and release 1.5.0 has 105. The report covers the problem, objectives, screenshot manual, selected code, folder structure and references. It retains the original cover page.
+
 ## Application
 
 [Open BackyardPay](https://quiet-pastelito-19fa50.netlify.app)
@@ -25,7 +31,7 @@ The deployed release is **1.5.0 (build 14)**. The application records cash and b
 | `test/` | Flutter unit and widget tests |
 | `tool/` | Build, browser and validation scripts |
 | `web/`, `assets/` | Browser entry files and bundled assets |
-| `downloads/` | Current web ZIP, source ZIP and database setup |
+| `downloads/` | Current project report, web ZIP, source ZIP and database setup |
 
 [Source structure](docs/PROJECT-STRUCTURE.md)
 
